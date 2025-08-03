@@ -4,11 +4,10 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
-import joblib
 import os
 from datetime import datetime, timedelta
 import json
@@ -42,14 +41,14 @@ class Transaction(db.Model):
     category = db.Column(db.String(50), nullable=False)
     description = db.Column(db.String(200))
     date = db.Column(db.DateTime, default=datetime.utcnow)
-    transaction_type = db.Column(db.String(20), default='expense')  # expense or income
+    transaction_type = db.Column(db.String(20), default='expense')
 
 class Budget(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     category = db.Column(db.String(50), nullable=False)
     amount = db.Column(db.Float, nullable=False)
-    month = db.Column(db.String(7), nullable=False)  # YYYY-MM format
+    month = db.Column(db.String(7), nullable=False)
 
 class MLModel:
     def __init__(self):
@@ -60,19 +59,13 @@ class MLModel:
         
     def prepare_data(self, transactions_df):
         """Prepare transaction data for ML model"""
-        # Create features
         transactions_df['month'] = pd.to_datetime(transactions_df['date']).dt.month
         transactions_df['day_of_week'] = pd.to_datetime(transactions_df['date']).dt.dayofweek
         transactions_df['day_of_month'] = pd.to_datetime(transactions_df['date']).dt.day
-        
-        # Encode categories
         transactions_df['category_encoded'] = self.label_encoder.fit_transform(transactions_df['category'])
-        
-        # Create spending patterns
         transactions_df['is_weekend'] = transactions_df['day_of_week'].isin([5, 6]).astype(int)
         transactions_df['is_month_start'] = (transactions_df['day_of_month'] <= 5).astype(int)
         transactions_df['is_month_end'] = (transactions_df['day_of_month'] >= 25).astype(int)
-        
         return transactions_df
     
     def train_model(self, transactions_df):
@@ -80,28 +73,20 @@ class MLModel:
         if len(transactions_df) < 10:
             return False
             
-        # Prepare data
         df = self.prepare_data(transactions_df)
-        
-        # Features for prediction
         features = ['month', 'day_of_week', 'day_of_month', 'category_encoded', 
                    'is_weekend', 'is_month_start', 'is_month_end']
         
         X = df[features]
         y = df['amount']
         
-        # Split data
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        
-        # Scale features
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
         
-        # Train model
         self.model = GradientBoostingRegressor(n_estimators=100, random_state=42)
         self.model.fit(X_train_scaled, y_train)
         
-        # Evaluate
         y_pred = self.model.predict(X_test_scaled)
         mse = mean_squared_error(y_test, y_pred)
         r2 = r2_score(y_test, y_pred)
@@ -114,7 +99,6 @@ class MLModel:
         if not self.is_trained:
             return None
             
-        # Prepare input
         input_data = pd.DataFrame({
             'month': [date.month],
             'day_of_week': [date.weekday()],
@@ -125,11 +109,10 @@ class MLModel:
             'is_month_end': [1 if date.day >= 25 else 0]
         })
         
-        # Scale and predict
         input_scaled = self.scaler.transform(input_data)
         prediction = self.model.predict(input_scaled)[0]
         
-        return max(0, prediction)  # Ensure non-negative
+        return max(0, prediction)
 
 # Initialize ML model
 ml_model = MLModel()
@@ -190,10 +173,8 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    # Get user's transactions
     transactions = Transaction.query.filter_by(user_id=current_user.id).order_by(Transaction.date.desc()).limit(10).all()
     
-    # Calculate spending by category
     category_spending = {}
     total_spent = 0
     
@@ -205,7 +186,6 @@ def dashboard():
             category_spending[category] += transaction.amount
             total_spent += transaction.amount
     
-    # Get current month's budget
     current_month = datetime.now().strftime('%Y-%m')
     budgets = Budget.query.filter_by(user_id=current_user.id, month=current_month).all()
     
@@ -235,7 +215,6 @@ def add_transaction():
     db.session.add(transaction)
     db.session.commit()
     
-    # Retrain ML model with new data
     transactions_df = pd.read_sql(
         Transaction.query.filter_by(user_id=current_user.id).statement,
         db.engine
@@ -253,7 +232,6 @@ def set_budget():
     amount = float(request.form['amount'])
     current_month = datetime.now().strftime('%Y-%m')
     
-    # Check if budget already exists for this category and month
     existing_budget = Budget.query.filter_by(
         user_id=current_user.id,
         category=category,
@@ -278,7 +256,6 @@ def set_budget():
 @app.route('/ml_recommendations')
 @login_required
 def ml_recommendations():
-    # Get user's transaction history
     transactions_df = pd.read_sql(
         Transaction.query.filter_by(user_id=current_user.id).statement,
         db.engine
@@ -287,23 +264,20 @@ def ml_recommendations():
     if len(transactions_df) < 10:
         return jsonify({'error': 'Not enough transaction data for ML recommendations'})
     
-    # Train model if not already trained
     if not ml_model.is_trained:
         ml_model.train_model(transactions_df)
     
-    # Generate recommendations
     recommendations = {}
     categories = transactions_df['category'].unique()
     
     for category in categories:
-        # Predict spending for next month
         next_month = datetime.now() + timedelta(days=30)
         predicted_spending = ml_model.predict_spending(category, next_month)
         
         if predicted_spending:
             recommendations[category] = {
                 'predicted_spending': round(predicted_spending, 2),
-                'recommended_budget': round(predicted_spending * 1.1, 2)  # Add 10% buffer
+                'recommended_budget': round(predicted_spending * 1.1, 2)
             }
     
     return jsonify(recommendations)
@@ -311,7 +285,6 @@ def ml_recommendations():
 @app.route('/spending_analysis')
 @login_required
 def spending_analysis():
-    # Get spending patterns
     transactions_df = pd.read_sql(
         Transaction.query.filter_by(user_id=current_user.id).statement,
         db.engine
@@ -320,7 +293,6 @@ def spending_analysis():
     if len(transactions_df) == 0:
         return jsonify({'error': 'No transaction data available'})
     
-    # Analyze spending patterns
     expenses_df = transactions_df[transactions_df['transaction_type'] == 'expense']
     
     analysis = {

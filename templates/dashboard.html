@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - ML Budget App{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="text-white fw-bold animate__animated animate__fadeInDown">
+            <i class="fas fa-tachometer-alt me-2"></i>Smart Dashboard
+        </h1>
+        <p class="text-white-50 animate__animated animate__fadeInUp animate__delay-1s">
+            Welcome back, {{ current_user.username }}! Here's your financial overview.
+        </p>
+    </div>
+</div>
+
+<!-- Financial Overview Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="stats-card animate__animated animate__fadeInUp animate__delay-2s">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="mb-2 fw-bold">${{ "%.2f"|format(income) }}</h3>
+                    <p class="mb-0 opacity-75">Monthly Income</p>
+                </div>
+                <i class="fas fa-arrow-up text-success" style="font-size: 2rem;"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stats-card animate__animated animate__fadeInUp animate__delay-3s">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="mb-2 fw-bold">${{ "%.2f"|format(total_spent) }}</h3>
+                    <p class="mb-0 opacity-75">Total Spent</p>
+                </div>
+                <i class="fas fa-shopping-cart text-warning" style="font-size: 2rem;"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stats-card animate__animated animate__fadeInUp animate__delay-4s">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="mb-2 fw-bold">${{ "%.2f"|format(income - total_spent) }}</h3>
+                    <p class="mb-0 opacity-75">Remaining</p>
+                </div>
+                <i class="fas fa-piggy-bank text-info" style="font-size: 2rem;"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stats-card animate__animated animate__fadeInUp animate__delay-5s">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="mb-2 fw-bold">{{ "%.1f"|format((total_spent / income * 100) if income > 0 else 0) }}%</h3>
+                    <p class="mb-0 opacity-75">Budget Used</p>
+                </div>
+                <i class="fas fa-chart-pie text-primary" style="font-size: 2rem;"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Budget Progress -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card animate__animated animate__fadeInUp animate__delay-6s">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="fas fa-chart-line me-2 text-primary"></i>Budget Progress
+                </h5>
+                <div class="progress mb-3" style="height: 20px;">
+                    <div class="progress-bar bg-success" role="progressbar" 
+                         style="width: {{ (total_spent / income * 100) if income > 0 else 0 }}%"
+                         aria-valuenow="{{ (total_spent / income * 100) if income > 0 else 0 }}" 
+                         aria-valuemin="0" aria-valuemax="100">
+                        {{ "%.1f"|format((total_spent / income * 100) if income > 0 else 0) }}%
+                    </div>
+                </div>
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <small class="text-muted">Income: ${{ "%.2f"|format(income) }}</small>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted">Spent: ${{ "%.2f"|format(total_spent) }}</small>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted">Remaining: ${{ "%.2f"|format(income - total_spent) }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card animate__animated animate__fadeInLeft animate__delay-7s">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="fas fa-chart-pie me-2 text-warning"></i>Spending by Category
+                </h5>
+                <div class="chart-container">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card animate__animated animate__fadeInRight animate__delay-8s">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="fas fa-chart-line me-2 text-info"></i>Monthly Trend
+                </h5>
+                <div class="chart-container">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card animate__animated animate__fadeInUp animate__delay-9s">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="fas fa-bolt me-2 text-primary"></i>Quick Actions
+                </h5>
+                <div class="row">
+                    <div class="col-md-3 mb-2">
+                        <button class="btn btn-primary w-100" data-bs-toggle="modal" data-bs-target="#addTransactionModal">
+                            <i class="fas fa-plus me-2"></i>Add Transaction
+                        </button>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <button class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#setBudgetModal">
+                            <i class="fas fa-cog me-2"></i>Set Budget
+                        </button>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('spending_analysis') }}" class="btn btn-info w-100">
+                            <i class="fas fa-chart-bar me-2"></i>View Analytics
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-2">
+                        <a href="{{ url_for('ml_recommendations') }}" class="btn btn-warning w-100">
+                            <i class="fas fa-robot me-2"></i>AI Insights
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Transactions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card animate__animated animate__fadeInUp animate__delay-10s">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="fas fa-history me-2 text-primary"></i>Recent Transactions
+                </h5>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Category</th>
+                                <th>Amount</th>
+                                <th>Type</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in recent_transactions %}
+                            <tr class="animate__animated animate__fadeInUp animate__delay-{{ loop.index + 10 }}s">
+                                <td>{{ transaction.date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ transaction.description }}</td>
+                                <td>
+                                    <span class="badge bg-primary">{{ transaction.category }}</span>
+                                </td>
+                                <td class="fw-bold {{ 'text-success' if transaction.type == 'income' else 'text-danger' }}">
+                                    {{ '$' if transaction.type == 'income' else '-$' }}{{ "%.2f"|format(transaction.amount) }}
+                                </td>
+                                <td>
+                                    <i class="fas fa-{{ 'arrow-up text-success' if transaction.type == 'income' else 'arrow-down text-danger' }}"></i>
+                                    {{ transaction.type.title() }}
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="editTransaction({{ transaction.id }})">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteTransaction({{ transaction.id }})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AI Insights Preview -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card animate__animated animate__fadeInUp animate__delay-11s">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    <i class="fas fa-robot me-2 text-warning"></i>AI Insights
+                </h5>
+                <div class="row">
+                    {% for insight in ml_insights %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="fas fa-{{ insight.icon }} text-{{ insight.color }} mb-2" style="font-size: 2rem;"></i>
+                                <h6 class="card-title">{{ insight.title }}</h6>
+                                <p class="card-text small">{{ insight.description }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Transaction Modal -->
+<div class="modal fade" id="addTransactionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus me-2"></i>Add Transaction
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_transaction') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <input type="text" class="form-control" id="description" name="description" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="amount" class="form-label">Amount</label>
+                        <input type="number" step="0.01" class="form-control" id="amount" name="amount" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="category" class="form-label">Category</label>
+                        <select class="form-control" id="category" name="category" required>
+                            <option value="">Select Category</option>
+                            <option value="Food & Dining">Food & Dining</option>
+                            <option value="Transportation">Transportation</option>
+                            <option value="Entertainment">Entertainment</option>
+                            <option value="Shopping">Shopping</option>
+                            <option value="Bills & Utilities">Bills & Utilities</option>
+                            <option value="Healthcare">Healthcare</option>
+                            <option value="Education">Education</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="type" class="form-label">Type</label>
+                        <select class="form-control" id="type" name="type" required>
+                            <option value="expense">Expense</option>
+                            <option value="income">Income</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="date" class="form-label">Date</label>
+                        <input type="date" class="form-control" id="date" name="date" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Save Transaction
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Set Budget Modal -->
+<div class="modal fade" id="setBudgetModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-cog me-2"></i>Set Monthly Budget
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('set_budget') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="monthly_income" class="form-label">Monthly Income</label>
+                        <input type="number" step="0.01" class="form-control" id="monthly_income" name="monthly_income" value="{{ income }}" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save me-2"></i>Update Budget
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Category Chart
+const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+const categoryChart = new Chart(categoryCtx, {
+    type: 'doughnut',
+    data: {
+        labels: {{ category_labels | tojson }},
+        datasets: [{
+            data: {{ category_data | tojson }},
+            backgroundColor: [
+                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', 
+                '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF'
+            ],
+            borderWidth: 2,
+            borderColor: '#fff'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+});
+
+// Trend Chart
+const trendCtx = document.getElementById('trendChart').getContext('2d');
+const trendChart = new Chart(trendCtx, {
+    type: 'line',
+    data: {
+        labels: {{ trend_labels | tojson }},
+        datasets: [{
+            label: 'Income',
+            data: {{ income_trend | tojson }},
+            borderColor: '#4CAF50',
+            backgroundColor: 'rgba(76, 175, 80, 0.1)',
+            tension: 0.4
+        }, {
+            label: 'Expenses',
+            data: {{ expense_trend | tojson }},
+            borderColor: '#f44336',
+            backgroundColor: 'rgba(244, 67, 54, 0.1)',
+            tension: 0.4
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'top'
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+// Transaction functions
+function editTransaction(id) {
+    // Implement edit functionality
+    alert('Edit transaction ' + id);
+}
+
+function deleteTransaction(id) {
+    if (confirm('Are you sure you want to delete this transaction?')) {
+        fetch(`/delete_transaction/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            }
+        });
+    }
+}
+
+// Auto-refresh data every 30 seconds
+setInterval(() => {
+    // Refresh charts and data
+    location.reload();
+}, 30000);
+</script>
+{% endblock %} 

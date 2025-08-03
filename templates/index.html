@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}ML Budget App - Smart Financial Management{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center min-vh-100">
+    <div class="col-lg-8 text-center">
+        <div class="card p-5">
+            <h1 class="display-4 fw-bold mb-4">
+                <i class="fas fa-brain text-primary me-3"></i>
+                ML Budget App
+            </h1>
+            <p class="lead mb-4">
+                Take control of your finances with our intelligent machine learning budget application. 
+                Get personalized spending insights and automated budget recommendations.
+            </p>
+            
+            <div class="row mb-5">
+                <div class="col-md-4">
+                    <div class="text-center mb-3">
+                        <i class="fas fa-chart-line fa-3x text-primary mb-3"></i>
+                        <h5>Smart Analytics</h5>
+                        <p class="text-muted">AI-powered spending analysis and predictions</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-center mb-3">
+                        <i class="fas fa-robot fa-3x text-secondary mb-3"></i>
+                        <h5>ML Recommendations</h5>
+                        <p class="text-muted">Intelligent budget suggestions based on your patterns</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="text-center mb-3">
+                        <i class="fas fa-shield-alt fa-3x text-success mb-3"></i>
+                        <h5>Financial Control</h5>
+                        <p class="text-muted">Stay on track with automated spending controls</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-grid gap-3 d-sm-flex justify-content-sm-center">
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg px-4 me-sm-3">
+                    <i class="fas fa-user-plus me-2"></i>Get Started
+                </a>
+                <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-lg px-4">
+                    <i class="fas fa-sign-in-alt me-2"></i>Sign In
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

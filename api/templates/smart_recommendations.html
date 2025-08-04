@@ -1,189 +1,198 @@
 {% extends "base.html" %}
 
-{% block title %}Smart Recommendations{% endblock %}
+{% block title %}Smart Recommendations - Smart Budget App{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1 class="h3 mb-0">
-                    <i class="fas fa-lightbulb text-warning"></i> AI Smart Recommendations
-                </h1>
-                <button class="btn btn-primary" onclick="refreshRecommendations()">
-                    <i class="fas fa-sync-alt"></i> Refresh
-                </button>
-            </div>
-        </div>
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="fw-bold">
+            <i class="fas fa-lightbulb me-3"></i>Smart Recommendations
+        </h1>
+        <p class="text-muted">Personalized financial advice based on your spending patterns.</p>
     </div>
-
-    <!-- Recommendations Grid -->
-    <div class="row">
-        {% for recommendation in recommendations %}
-        <div class="col-md-6 col-lg-4 mb-4">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-header bg-transparent border-0">
-                    {% if recommendation.type == 'budget_warning' %}
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-exclamation-triangle text-warning fa-2x me-3"></i>
-                            <div>
-                                <h6 class="mb-0 text-warning">Budget Warning</h6>
-                                <small class="text-muted">{{ recommendation.category }}</small>
-                            </div>
-                        </div>
-                    {% elif recommendation.type == 'budget_opportunity' %}
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-chart-line text-success fa-2x me-3"></i>
-                            <div>
-                                <h6 class="mb-0 text-success">Budget Opportunity</h6>
-                                <small class="text-muted">{{ recommendation.category }}</small>
-                            </div>
-                        </div>
-                    {% elif recommendation.type == 'savings_opportunity' %}
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-piggy-bank text-info fa-2x me-3"></i>
-                            <div>
-                                <h6 class="mb-0 text-info">Savings Opportunity</h6>
-                                <small class="text-muted">{{ recommendation.category }}</small>
-                            </div>
-                        </div>
-                    {% elif recommendation.type == 'spending_insight' %}
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-eye text-primary fa-2x me-3"></i>
-                            <div>
-                                <h6 class="mb-0 text-primary">Spending Insight</h6>
-                                <small class="text-muted">Pattern Analysis</small>
-                            </div>
-                        </div>
-                    {% else %}
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-info-circle text-secondary fa-2x me-3"></i>
-                            <div>
-                                <h6 class="mb-0 text-secondary">General</h6>
-                                <small class="text-muted">Recommendation</small>
-                            </div>
-                        </div>
-                    {% endif %}
-                </div>
-                <div class="card-body">
-                    <p class="card-text">{{ recommendation.message }}</p>
-                    {% if recommendation.suggestion %}
-                    <div class="alert alert-light border">
-                        <strong>💡 Suggestion:</strong> {{ recommendation.suggestion }}
-                    </div>
-                    {% endif %}
-                </div>
-                <div class="card-footer bg-transparent border-0">
-                    <button class="btn btn-outline-primary btn-sm" onclick="applyRecommendation('{{ recommendation.type }}', '{{ recommendation.category }}')">
-                        <i class="fas fa-check"></i> Apply
-                    </button>
-                    <button class="btn btn-outline-secondary btn-sm" onclick="dismissRecommendation('{{ recommendation.type }}')">
-                        <i class="fas fa-times"></i> Dismiss
-                    </button>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <!-- No Recommendations Message -->
-    {% if not recommendations %}
-    <div class="row">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-body text-center py-5">
-                    <i class="fas fa-chart-line text-muted fa-4x mb-3"></i>
-                    <h4 class="text-muted">No Recommendations Yet</h4>
-                    <p class="text-muted">Start adding transactions and setting budgets to get personalized AI recommendations!</p>
-                    <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">
-                        <i class="fas fa-plus"></i> Add Transaction
-                    </a>
-                    <a href="{{ url_for('set_budget') }}" class="btn btn-outline-primary ms-2">
-                        <i class="fas fa-cog"></i> Set Budget
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- AI Insights Summary -->
-    {% if recommendations %}
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card bg-gradient-primary text-white">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <h5 class="card-title">
-                                <i class="fas fa-brain"></i> AI Insights Summary
-                            </h5>
-                            <p class="card-text mb-0">
-                                Based on your spending patterns, we've identified {{ recommendations|length }} opportunities 
-                                to optimize your budget and improve your financial health.
-                            </p>
-                        </div>
-                        <div class="col-md-4 text-end">
-                            <div class="d-flex flex-column">
-                                <span class="h4 mb-0">{{ recommendations|length }}</span>
-                                <small>Recommendations</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 </div>
 
+<!-- Financial Overview -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Monthly Income</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(income) }}</h3>
+                </div>
+                <i class="fas fa-dollar-sign fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Total Spent</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(total_spent) }}</h3>
+                </div>
+                <i class="fas fa-shopping-cart fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Personalized Recommendations -->
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-brain me-2"></i>Personalized Recommendations
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recommendations %}
+                    {% for recommendation in recommendations %}
+                    <div class="alert alert-{{ recommendation.type }} mb-3">
+                        <div class="d-flex align-items-start">
+                            <i class="fas fa-{{ 'exclamation-triangle' if recommendation.type == 'warning' else 'check-circle' if recommendation.type == 'success' else 'info-circle' if recommendation.type == 'info' else 'times-circle' }} me-3 mt-1"></i>
+                            <div>
+                                <h6 class="fw-bold mb-1">{{ recommendation.title }}</h6>
+                                <p class="mb-1">{{ recommendation.description }}</p>
+                                {% if recommendation.action %}
+                                <small class="text-muted"><i class="fas fa-lightbulb me-1"></i>{{ recommendation.action }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-thumbs-up fa-3x text-success mb-3"></i>
+                        <h4 class="text-success mb-3">Great Financial Habits!</h4>
+                        <p class="text-muted">
+                            Your financial patterns look healthy. Keep up the excellent work!
+                        </p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-star me-2"></i>General Financial Tips
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for tip in general_tips %}
+                <div class="mb-3">
+                    <div class="d-flex align-items-start">
+                        <i class="fas fa-{{ 'shield-alt' if tip.title == 'Emergency Fund' else 'calculator' }} text-{{ tip.type }} me-2 mt-1"></i>
+                        <div>
+                            <h6 class="fw-bold mb-1">{{ tip.title }}</h6>
+                            <p class="small text-muted mb-1">{{ tip.description }}</p>
+                            <small class="text-primary">{{ tip.action }}</small>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Savings Calculator -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-calculator me-2"></i>Savings Calculator
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="currentSavings" class="form-label">Current Monthly Savings</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" id="currentSavings" value="{{ "%.2f"|format(income - total_spent) }}" step="0.01">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="targetSavings" class="form-label">Target Monthly Savings (20% of income)</label>
+                    <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        <input type="number" class="form-control" id="targetSavings" value="{{ "%.2f"|format(income * 0.2) }}" step="0.01">
+                    </div>
+                </div>
+                <div class="alert alert-info">
+                    <strong>Savings Gap:</strong> <span id="savingsGap">$0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i>Financial Goals Tracker
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="text-center">
+                            <h4 class="text-primary">50%</h4>
+                            <small class="text-muted">Needs</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-center">
+                            <h4 class="text-warning">30%</h4>
+                            <small class="text-muted">Wants</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="text-center">
+                            <h4 class="text-success">20%</h4>
+                            <small class="text-muted">Savings</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="progress mt-3" style="height: 10px;">
+                    <div class="progress-bar bg-primary" style="width: 50%"></div>
+                    <div class="progress-bar bg-warning" style="width: 30%"></div>
+                    <div class="progress-bar bg-success" style="width: 20%"></div>
+                </div>
+                <small class="text-muted">50/30/20 Budget Rule</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script>
-function refreshRecommendations() {
-    location.reload();
-}
-
-function applyRecommendation(type, category) {
-    // Show success message
-    Swal.fire({
-        title: 'Recommendation Applied!',
-        text: 'We\'ll help you implement this suggestion.',
-        icon: 'success',
-        confirmButtonText: 'Great!'
-    });
-}
-
-function dismissRecommendation(type) {
-    // Show confirmation
-    Swal.fire({
-        title: 'Dismiss Recommendation?',
-        text: 'This recommendation will be hidden for now.',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Dismiss',
-        cancelButtonText: 'Keep'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            // Hide the recommendation card
-            event.target.closest('.col-md-6').style.display = 'none';
-        }
-    });
-}
-
-// Add some animations
 document.addEventListener('DOMContentLoaded', function() {
-    const cards = document.querySelectorAll('.card');
-    cards.forEach((card, index) => {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(20px)';
-        setTimeout(() => {
-            card.style.transition = 'all 0.5s ease';
-            card.style.opacity = '1';
-            card.style.transform = 'translateY(0)';
-        }, index * 100);
-    });
+    const currentSavings = document.getElementById('currentSavings');
+    const targetSavings = document.getElementById('targetSavings');
+    const savingsGap = document.getElementById('savingsGap');
+    
+    function calculateGap() {
+        const current = parseFloat(currentSavings.value) || 0;
+        const target = parseFloat(targetSavings.value) || 0;
+        const gap = target - current;
+        savingsGap.textContent = gap >= 0 ? `$${gap.toFixed(2)}` : `$${Math.abs(gap).toFixed(2)} (over target)`;
+        savingsGap.className = gap >= 0 ? 'text-danger' : 'text-success';
+    }
+    
+    currentSavings.addEventListener('input', calculateGap);
+    targetSavings.addEventListener('input', calculateGap);
+    calculateGap();
 });
 </script>
-
-<!-- SweetAlert2 for better modals -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 {% endblock %} 

@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Budget Optimizer - Smart Budget App{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="fw-bold">
+            <i class="fas fa-cogs me-3"></i>Budget Optimizer
+        </h1>
+        <p class="text-muted">Optimize your budget allocation for better financial health.</p>
+    </div>
+</div>
+
+<!-- Budget Overview -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Monthly Income</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(optimization.income) }}</h3>
+                </div>
+                <i class="fas fa-dollar-sign fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Current Budget</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(optimization.current_budget) }}</h3>
+                </div>
+                <i class="fas fa-chart-pie fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Actual Spending</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(optimization.spending) }}</h3>
+                </div>
+                <i class="fas fa-shopping-cart fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Available</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(optimization.available_for_budget) }}</h3>
+                </div>
+                <i class="fas fa-wallet fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Budget Suggestions -->
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-lightbulb me-2"></i>Budget Optimization Suggestions
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if suggestions %}
+                    {% for suggestion in suggestions %}
+                    <div class="alert alert-info mb-3">
+                        <h6 class="fw-bold mb-2">{{ suggestion.rule }}</h6>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <h5 class="text-primary">${{ "%.2f"|format(suggestion.needs) }}</h5>
+                                    <small class="text-muted">Needs (50%)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <h5 class="text-warning">${{ "%.2f"|format(suggestion.wants) }}</h5>
+                                    <small class="text-muted">Wants (30%)</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <h5 class="text-success">${{ "%.2f"|format(suggestion.savings) }}</h5>
+                                    <small class="text-muted">Savings (20%)</small>
+                                </div>
+                            </div>
+                        </div>
+                        <small class="text-muted">{{ suggestion.description }}</small>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                        <h4 class="text-muted mb-3">No Budget Data</h4>
+                        <p class="text-muted">
+                            Set up your budget categories to get optimization suggestions.
+                        </p>
+                        <a href="{{ url_for('set_budget') }}" class="btn btn-primary">
+                            <i class="fas fa-cog me-2"></i>Set Budget
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>Budget vs Actual
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if current_vs_suggested %}
+                    {% for item in current_vs_suggested %}
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-bold">{{ item.category }}</span>
+                            <span class="badge bg-{{ 'danger' if item.status == 'over' else 'success' if item.status == 'good' else 'warning' }}">
+                                {{ item.status }}
+                            </span>
+                        </div>
+                        <div class="progress mb-1" style="height: 8px;">
+                            <div class="progress-bar bg-{{ 'danger' if item.status == 'over' else 'success' if item.status == 'good' else 'warning' }}" 
+                                 style="width: {{ min(item.efficiency, 100) }}%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between small text-muted">
+                            <span>Spent: ${{ "%.2f"|format(item.spent) }}</span>
+                            <span>Budget: ${{ "%.2f"|format(item.budgeted) }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-chart-bar fa-2x text-muted mb-2"></i>
+                        <p class="text-muted small mb-0">No budget vs actual data available</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Category Spending Analysis -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>Category Spending Analysis
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if category_spending %}
+                    <div class="row">
+                        {% for category, amount in category_spending.items() %}
+                        <div class="col-md-4 mb-3">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="mb-1">{{ category }}</h6>
+                                            <small class="text-muted">Total spent</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <h5 class="mb-0 text-primary">${{ "%.2f"|format(amount) }}</h5>
+                                            <small class="text-muted">
+                                                {% set total_spent = category_spending.values() | sum %}
+                                                {{ "%.1f"|format((amount / total_spent) * 100) }}% of total
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                        <h4 class="text-muted mb-3">No Spending Data</h4>
+                        <p class="text-muted">
+                            Add some transactions to see category spending analysis.
+                        </p>
+                        <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Add Transaction
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

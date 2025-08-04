@@ -742,5 +742,454 @@ def dashboard_simple():
             "status": "error"
         }), 500
 
+@app.route('/ai-analysis')
+def ai_analysis():
+    try:
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        
+        user_id = session['user_id']
+        user_transactions = [t for t in transactions if t.get('user_id') == user_id]
+        
+        # Get user data for income
+        user_data = None
+        for username, user in users.items():
+            if user.get('id') == user_id:
+                user_data = user
+                break
+        
+        income = user_data.get('income', 0) if user_data else 0
+        total_spent = sum(t.get('amount', 0) for t in user_transactions)
+        
+        # AI Analysis
+        analysis = {
+            'total_transactions': len(user_transactions),
+            'avg_transaction': total_spent / len(user_transactions) if user_transactions else 0,
+            'spending_ratio': (total_spent / income * 100) if income > 0 else 0,
+            'savings_rate': ((income - total_spent) / income * 100) if income > 0 else 0
+        }
+        
+        # Category analysis
+        category_spending = {}
+        for transaction in user_transactions:
+            category = transaction.get('category', 'Other')
+            amount = transaction.get('amount', 0)
+            category_spending[category] = category_spending.get(category, 0) + amount
+        
+        # Spending insights
+        insights = []
+        if category_spending:
+            top_category = max(category_spending, key=category_spending.get)
+            top_amount = category_spending[top_category]
+            percentage = (top_amount / total_spent) * 100 if total_spent > 0 else 0
+            
+            insights.append({
+                'type': 'spending_pattern',
+                'title': 'Top Spending Category',
+                'description': f'{top_category} accounts for {percentage:.1f}% of your spending',
+                'recommendation': f'Consider reducing {top_category} expenses to save more'
+            })
+        
+        if analysis['spending_ratio'] > 80:
+            insights.append({
+                'type': 'warning',
+                'title': 'High Spending Ratio',
+                'description': f'You\'re spending {analysis["spending_ratio"]:.1f}% of your income',
+                'recommendation': 'Try to reduce expenses to increase savings'
+            })
+        elif analysis['savings_rate'] > 20:
+            insights.append({
+                'type': 'success',
+                'title': 'Excellent Savings Rate',
+                'description': f'You\'re saving {analysis["savings_rate"]:.1f}% of your income',
+                'recommendation': 'Great job! Keep up the good financial habits'
+            })
+        
+        return render_template('ai_analysis.html', 
+                             analysis=analysis,
+                             insights=insights,
+                             category_spending=category_spending,
+                             income=income,
+                             total_spent=total_spent)
+    except Exception as e:
+        print(f"AI Analysis error: {e}")
+        print(traceback.format_exc())
+        flash('An error occurred loading AI analysis. Please try again.', 'error')
+        return render_template('ai_analysis.html', 
+                             analysis={},
+                             insights=[],
+                             category_spending={},
+                             income=0,
+                             total_spent=0)
+
+@app.route('/smart-recommendations')
+def smart_recommendations():
+    try:
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        
+        user_id = session['user_id']
+        user_transactions = [t for t in transactions if t.get('user_id') == user_id]
+        user_budgets = budgets.get(user_id, {})
+        
+        # Get user data for income
+        user_data = None
+        for username, user in users.items():
+            if user.get('id') == user_id:
+                user_data = user
+                break
+        
+        income = user_data.get('income', 0) if user_data else 0
+        total_spent = sum(t.get('amount', 0) for t in user_transactions)
+        
+        # Smart recommendations
+        recommendations = []
+        
+        # Spending pattern analysis
+        if user_transactions:
+            # Category analysis
+            category_spending = {}
+            for transaction in user_transactions:
+                category = transaction.get('category', 'Other')
+                amount = transaction.get('amount', 0)
+                category_spending[category] = category_spending.get(category, 0) + amount
+            
+            if category_spending:
+                top_category = max(category_spending, key=category_spending.get)
+                top_amount = category_spending[top_category]
+                percentage = (top_amount / total_spent) * 100 if total_spent > 0 else 0
+                
+                if percentage > 40:
+                    recommendations.append({
+                        'type': 'warning',
+                        'title': 'High Category Concentration',
+                        'description': f'{top_category} is {percentage:.1f}% of your spending',
+                        'action': f'Consider diversifying your spending across categories'
+                    })
+        
+        # Budget recommendations
+        if user_budgets:
+            total_budget = sum(user_budgets.values())
+            if total_budget > income:
+                recommendations.append({
+                    'type': 'danger',
+                    'title': 'Budget Exceeds Income',
+                    'description': f'Your budget (${total_budget:.2f}) exceeds your income (${income:.2f})',
+                    'action': 'Reduce your budget categories to match your income'
+                })
+            elif total_budget < income * 0.8:
+                recommendations.append({
+                    'type': 'info',
+                    'title': 'Under-Budgeted',
+                    'description': f'Your budget uses only {(total_budget/income*100):.1f}% of your income',
+                    'action': 'Consider adding more budget categories or increasing savings goals'
+                })
+        
+        # Savings recommendations
+        if income > 0:
+            savings_rate = ((income - total_spent) / income) * 100
+            if savings_rate < 10:
+                recommendations.append({
+                    'type': 'warning',
+                    'title': 'Low Savings Rate',
+                    'description': f'You\'re saving only {savings_rate:.1f}% of your income',
+                    'action': 'Aim to save at least 20% of your income for financial security'
+                })
+            elif savings_rate > 30:
+                recommendations.append({
+                    'type': 'success',
+                    'title': 'Excellent Savings Rate',
+                    'description': f'You\'re saving {savings_rate:.1f}% of your income',
+                    'action': 'Consider investing your savings for long-term growth'
+                })
+        
+        # General financial tips
+        general_tips = [
+            {
+                'type': 'info',
+                'title': 'Emergency Fund',
+                'description': 'Aim to save 3-6 months of expenses',
+                'action': 'Start building your emergency fund today'
+            },
+            {
+                'type': 'info',
+                'title': '50/30/20 Rule',
+                'description': '50% needs, 30% wants, 20% savings',
+                'action': 'Use this rule to balance your spending'
+            }
+        ]
+        
+        return render_template('smart_recommendations.html', 
+                             recommendations=recommendations,
+                             general_tips=general_tips,
+                             income=income,
+                             total_spent=total_spent)
+    except Exception as e:
+        print(f"Smart recommendations error: {e}")
+        print(traceback.format_exc())
+        flash('An error occurred loading smart recommendations. Please try again.', 'error')
+        return render_template('smart_recommendations.html', 
+                             recommendations=[],
+                             general_tips=[],
+                             income=0,
+                             total_spent=0)
+
+@app.route('/budget-optimizer')
+def budget_optimizer():
+    try:
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        
+        user_id = session['user_id']
+        user_transactions = [t for t in transactions if t.get('user_id') == user_id]
+        user_budgets = budgets.get(user_id, {})
+        
+        # Get user data for income
+        user_data = None
+        for username, user in users.items():
+            if user.get('id') == user_id:
+                user_data = user
+                break
+        
+        income = user_data.get('income', 0) if user_data else 0
+        total_spent = sum(t.get('amount', 0) for t in user_transactions)
+        
+        # Budget optimization
+        optimization = {
+            'current_budget': sum(user_budgets.values()),
+            'income': income,
+            'spending': total_spent,
+            'available_for_budget': income - total_spent
+        }
+        
+        # Category spending analysis
+        category_spending = {}
+        for transaction in user_transactions:
+            category = transaction.get('category', 'Other')
+            amount = transaction.get('amount', 0)
+            category_spending[category] = category_spending.get(category, 0) + amount
+        
+        # Budget suggestions
+        suggestions = []
+        if income > 0:
+            # 50/30/20 rule suggestions
+            needs_budget = income * 0.5
+            wants_budget = income * 0.3
+            savings_budget = income * 0.2
+            
+            suggestions.append({
+                'rule': '50/30/20 Rule',
+                'needs': needs_budget,
+                'wants': wants_budget,
+                'savings': savings_budget,
+                'description': 'Traditional budgeting rule for balanced finances'
+            })
+        
+        # Current vs suggested
+        current_vs_suggested = []
+        for category, spent in category_spending.items():
+            if category in user_budgets:
+                budgeted = user_budgets[category]
+                efficiency = (spent / budgeted * 100) if budgeted > 0 else 0
+                current_vs_suggested.append({
+                    'category': category,
+                    'spent': spent,
+                    'budgeted': budgeted,
+                    'efficiency': efficiency,
+                    'status': 'over' if spent > budgeted else 'under' if efficiency < 80 else 'good'
+                })
+        
+        return render_template('budget_optimizer.html', 
+                             optimization=optimization,
+                             suggestions=suggestions,
+                             current_vs_suggested=current_vs_suggested,
+                             category_spending=category_spending)
+    except Exception as e:
+        print(f"Budget optimizer error: {e}")
+        print(traceback.format_exc())
+        flash('An error occurred loading budget optimizer. Please try again.', 'error')
+        return render_template('budget_optimizer.html', 
+                             optimization={},
+                             suggestions=[],
+                             current_vs_suggested=[],
+                             category_spending={})
+
+@app.route('/goal-insights')
+def goal_insights():
+    try:
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        
+        user_id = session['user_id']
+        user_goals = [g for g in goals if g.get('user_id') == user_id]
+        user_transactions = [t for t in transactions if t.get('user_id') == user_id]
+        
+        # Goal insights
+        insights = []
+        total_saved = sum(g.get('current_amount', 0) for g in user_goals)
+        total_target = sum(g.get('target_amount', 0) for g in user_goals)
+        
+        if user_goals:
+            # Progress analysis
+            overall_progress = (total_saved / total_target * 100) if total_target > 0 else 0
+            insights.append({
+                'type': 'progress',
+                'title': 'Overall Goal Progress',
+                'value': f'{overall_progress:.1f}%',
+                'description': f'${total_saved:.2f} saved of ${total_target:.2f} target'
+            })
+            
+            # Goal recommendations
+            for goal in user_goals:
+                progress = (goal.get('current_amount', 0) / goal.get('target_amount', 1)) * 100
+                if progress < 25:
+                    insights.append({
+                        'type': 'warning',
+                        'title': f'{goal.get("title")} - Low Progress',
+                        'description': f'Only {progress:.1f}% complete',
+                        'action': 'Consider increasing your savings rate for this goal'
+                    })
+                elif progress > 75:
+                    insights.append({
+                        'type': 'success',
+                        'title': f'{goal.get("title")} - Almost Complete',
+                        'description': f'{progress:.1f}% complete',
+                        'action': 'Great progress! You\'re almost there!'
+                    })
+        
+        # Savings rate analysis
+        if user_transactions:
+            total_spent = sum(t.get('amount', 0) for t in user_transactions)
+            # Get user income
+            user_data = None
+            for username, user in users.items():
+                if user.get('id') == user_id:
+                    user_data = user
+                    break
+            income = user_data.get('income', 0) if user_data else 0
+            
+            if income > 0:
+                savings_rate = ((income - total_spent) / income) * 100
+                insights.append({
+                    'type': 'info',
+                    'title': 'Current Savings Rate',
+                    'value': f'{savings_rate:.1f}%',
+                    'description': f'You\'re saving ${income - total_spent:.2f} per month'
+                })
+        
+        return render_template('goal_insights.html', 
+                             insights=insights,
+                             goals=user_goals,
+                             total_saved=total_saved,
+                             total_target=total_target)
+    except Exception as e:
+        print(f"Goal insights error: {e}")
+        print(traceback.format_exc())
+        flash('An error occurred loading goal insights. Please try again.', 'error')
+        return render_template('goal_insights.html', 
+                             insights=[],
+                             goals=[],
+                             total_saved=0,
+                             total_target=0)
+
+@app.route('/ai-predictions')
+def ai_predictions():
+    try:
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        
+        user_id = session['user_id']
+        user_transactions = [t for t in transactions if t.get('user_id') == user_id]
+        
+        # Get user data for income
+        user_data = None
+        for username, user in users.items():
+            if user.get('id') == user_id:
+                user_data = user
+                break
+        
+        income = user_data.get('income', 0) if user_data else 0
+        total_spent = sum(t.get('amount', 0) for t in user_transactions)
+        
+        # Simple predictions based on current data
+        predictions = []
+        
+        if user_transactions:
+            # Monthly spending prediction
+            avg_monthly_spending = total_spent / len(user_transactions) * 30 if user_transactions else 0
+            predictions.append({
+                'type': 'spending',
+                'title': 'Monthly Spending Prediction',
+                'value': f'${avg_monthly_spending:.2f}',
+                'description': 'Based on your current spending patterns'
+            })
+            
+            # Savings prediction
+            if income > 0:
+                current_savings_rate = ((income - total_spent) / income) * 100
+                monthly_savings = income - avg_monthly_spending
+                predictions.append({
+                    'type': 'savings',
+                    'title': 'Monthly Savings Prediction',
+                    'value': f'${monthly_savings:.2f}',
+                    'description': f'At {current_savings_rate:.1f}% savings rate'
+                })
+            
+            # Category predictions
+            category_spending = {}
+            for transaction in user_transactions:
+                category = transaction.get('category', 'Other')
+                amount = transaction.get('amount', 0)
+                category_spending[category] = category_spending.get(category, 0) + amount
+            
+            if category_spending:
+                top_category = max(category_spending, key=category_spending.get)
+                top_amount = category_spending[top_category]
+                monthly_top_category = top_amount / len(user_transactions) * 30
+                predictions.append({
+                    'type': 'category',
+                    'title': f'Monthly {top_category} Spending',
+                    'value': f'${monthly_top_category:.2f}',
+                    'description': 'Your highest spending category'
+                })
+        
+        # Financial health predictions
+        if income > 0:
+            savings_rate = ((income - total_spent) / income) * 100
+            if savings_rate > 20:
+                predictions.append({
+                    'type': 'success',
+                    'title': 'Financial Health Prediction',
+                    'value': 'Excellent',
+                    'description': 'You\'re on track for financial success'
+                })
+            elif savings_rate > 10:
+                predictions.append({
+                    'type': 'warning',
+                    'title': 'Financial Health Prediction',
+                    'value': 'Good',
+                    'description': 'Consider increasing your savings rate'
+                })
+            else:
+                predictions.append({
+                    'type': 'danger',
+                    'title': 'Financial Health Prediction',
+                    'value': 'Needs Improvement',
+                    'description': 'Focus on reducing expenses and increasing savings'
+                })
+        
+        return render_template('ai_predictions.html', 
+                             predictions=predictions,
+                             income=income,
+                             total_spent=total_spent)
+    except Exception as e:
+        print(f"AI predictions error: {e}")
+        print(traceback.format_exc())
+        flash('An error occurred loading AI predictions. Please try again.', 'error')
+        return render_template('ai_predictions.html', 
+                             predictions=[],
+                             income=0,
+                             total_spent=0)
+
 if __name__ == '__main__':
     app.run(debug=True) 

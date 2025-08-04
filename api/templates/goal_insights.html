@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Goal Insights - Smart Budget App{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="fw-bold">
+            <i class="fas fa-bullseye me-3"></i>Goal Insights
+        </h1>
+        <p class="text-muted">Track your financial goals and get personalized insights.</p>
+    </div>
+</div>
+
+<!-- Goal Overview -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Total Saved</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(total_saved) }}</h3>
+                </div>
+                <i class="fas fa-piggy-bank fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Total Target</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(total_target) }}</h3>
+                </div>
+                <i class="fas fa-target fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Goals Active</h6>
+                    <h3 class="mb-0">{{ goals|length }}</h3>
+                </div>
+                <i class="fas fa-bullseye fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Progress</h6>
+                    <h3 class="mb-0">{{ "%.1f"|format((total_saved / total_target * 100) if total_target > 0 else 0) }}%</h3>
+                </div>
+                <i class="fas fa-chart-line fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AI Insights -->
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-brain me-2"></i>AI-Generated Insights
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if insights %}
+                    {% for insight in insights %}
+                    <div class="alert alert-{{ 'warning' if insight.type == 'warning' else 'success' if insight.type == 'success' else 'info' }} mb-3">
+                        <div class="d-flex align-items-start">
+                            <i class="fas fa-{{ 'exclamation-triangle' if insight.type == 'warning' else 'check-circle' if insight.type == 'success' else 'info-circle' }} me-3 mt-1"></i>
+                            <div>
+                                <h6 class="fw-bold mb-1">{{ insight.title }}</h6>
+                                {% if insight.value %}
+                                <h4 class="mb-1">{{ insight.value }}</h4>
+                                {% endif %}
+                                <p class="mb-1">{{ insight.description }}</p>
+                                {% if insight.action %}
+                                <small class="text-muted"><i class="fas fa-lightbulb me-1"></i>{{ insight.action }}</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-bullseye fa-3x text-muted mb-3"></i>
+                        <h4 class="text-muted mb-3">No Goals Set</h4>
+                        <p class="text-muted">
+                            Set up your financial goals to get personalized insights.
+                        </p>
+                        <a href="{{ url_for('goals_page') }}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Set Goals
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>Goal Progress
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if goals %}
+                    {% for goal in goals %}
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="fw-bold">{{ goal.title }}</span>
+                            <span class="badge bg-{{ 'success' if (goal.current_amount / goal.target_amount * 100) > 75 else 'warning' if (goal.current_amount / goal.target_amount * 100) > 25 else 'danger' }}">
+                                {{ "%.1f"|format((goal.current_amount / goal.target_amount * 100)) }}%
+                            </span>
+                        </div>
+                        <div class="progress mb-1" style="height: 8px;">
+                            {% set progress = (goal.current_amount / goal.target_amount * 100) %}
+                            <div class="progress-bar bg-{{ 'success' if progress > 75 else 'warning' if progress > 25 else 'danger' }}" 
+                                 style="width: {{ min(progress, 100) }}%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between small text-muted">
+                            <span>${{ "%.2f"|format(goal.current_amount) }}</span>
+                            <span>${{ "%.2f"|format(goal.target_amount) }}</span>
+                        </div>
+                        {% if goal.deadline %}
+                        <small class="text-muted">Deadline: {{ goal.deadline }}</small>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-bullseye fa-2x text-muted mb-2"></i>
+                        <p class="text-muted small mb-0">No goals set yet</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Goal Recommendations -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-lightbulb me-2"></i>Goal Recommendations
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body text-center">
+                                <i class="fas fa-piggy-bank fa-3x text-success mb-3"></i>
+                                <h5>Emergency Fund</h5>
+                                <p class="small text-muted">Aim to save 3-6 months of expenses for emergencies.</p>
+                                <div class="progress mb-2">
+                                    <div class="progress-bar bg-success" style="width: 25%"></div>
+                                </div>
+                                <small class="text-muted">25% complete</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body text-center">
+                                <i class="fas fa-home fa-3x text-primary mb-3"></i>
+                                <h5>Down Payment</h5>
+                                <p class="small text-muted">Save 20% of home price for a down payment.</p>
+                                <div class="progress mb-2">
+                                    <div class="progress-bar bg-primary" style="width: 15%"></div>
+                                </div>
+                                <small class="text-muted">15% complete</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body text-center">
+                                <i class="fas fa-graduation-cap fa-3x text-warning mb-3"></i>
+                                <h5>Education Fund</h5>
+                                <p class="small text-muted">Save for education or skill development.</p>
+                                <div class="progress mb-2">
+                                    <div class="progress-bar bg-warning" style="width: 40%"></div>
+                                </div>
+                                <small class="text-muted">40% complete</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

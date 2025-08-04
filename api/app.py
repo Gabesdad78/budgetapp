@@ -1,40 +1,50 @@
-from flask import Flask, jsonify, request, render_template, redirect, url_for, flash, session
-from datetime import datetime
+from flask import Flask, jsonify, request, render_template, redirect, url_for, flash, session, send_file
+from datetime import datetime, timedelta
 from collections import defaultdict
 import json
+import os
+import csv
+import io
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 
-# Simple in-memory storage
-users = {}
-transactions = {}
-budgets = {}
+# Data storage files
+DATA_DIR = 'data'
+USERS_FILE = os.path.join(DATA_DIR, 'users.json')
+TRANSACTIONS_FILE = os.path.join(DATA_DIR, 'transactions.json')
+BUDGETS_FILE = os.path.join(DATA_DIR, 'budgets.json')
+GOALS_FILE = os.path.join(DATA_DIR, 'goals.json')
 
-# Sample data for demo
-if not users:
-    users['demo'] = {
-        'email': 'demo@example.com',
-        'password': 'password',
-        'income': 5000,
-        'id': 1
-    }
+# Create data directory if it doesn't exist
+os.makedirs(DATA_DIR, exist_ok=True)
 
-if not transactions:
-    transactions['demo'] = [
-        {'id': 1, 'description': 'Grocery Shopping', 'amount': 120.50, 'category': 'Food', 'date': '2025-08-01'},
-        {'id': 2, 'description': 'Gas Station', 'amount': 45.00, 'category': 'Transportation', 'date': '2025-08-02'},
-        {'id': 3, 'description': 'Netflix Subscription', 'amount': 15.99, 'category': 'Entertainment', 'date': '2025-08-03'}
-    ]
+def load_data(filename, default=None):
+    """Load data from JSON file"""
+    if default is None:
+        default = {}
+    try:
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                return json.load(f)
+        return default
+    except:
+        return default
 
-if not budgets:
-    budgets['demo'] = {
-        'Food': 300,
-        'Transportation': 200,
-        'Entertainment': 100,
-        'Utilities': 150,
-        'Shopping': 200
-    }
+def save_data(data, filename):
+    """Save data to JSON file"""
+    try:
+        with open(filename, 'w') as f:
+            json.dump(data, f, indent=2)
+        return True
+    except:
+        return False
+
+# Load data
+users = load_data(USERS_FILE)
+transactions = load_data(TRANSACTIONS_FILE)
+budgets = load_data(BUDGETS_FILE)
+goals = load_data(GOALS_FILE)
 
 @app.route('/')
 def index():
@@ -44,17 +54,38 @@ def index():
 def register():
     if request.method == 'POST':
         data = request.form
-        username = data.get('username', 'demo')
-        email = data.get('email', 'demo@example.com')
-        password = data.get('password', 'password')
-        income = float(data.get('income', 5000))
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+        income = float(data.get('income', 0))
+        
+        if not username or not email or not password:
+            flash('All fields are required!', 'error')
+            return render_template('register.html')
+        
+        if username in users:
+            flash('Username already exists!', 'error')
+            return render_template('register.html')
 
         users[username] = {
             'email': email,
             'password': password,
             'income': income,
-            'id': len(users) + 1
+            'id': len(users) + 1,
+            'created_at': datetime.now().isoformat()
         }
+        
+        # Initialize user data
+        transactions[username] = []
+        budgets[username] = {}
+        goals[username] = []
+        
+        # Save data
+        save_data(users, USERS_FILE)
+        save_data(transactions, TRANSACTIONS_FILE)
+        save_data(budgets, BUDGETS_FILE)
+        save_data(goals, GOALS_FILE)
+        
         flash('Registration successful! Please login.', 'success')
         return redirect(url_for('login'))
     
@@ -64,15 +95,15 @@ def register():
 def login():
     if request.method == 'POST':
         data = request.form
-        username = data.get('username', 'demo')
-        password = data.get('password', 'password')
+        username = data.get('username')
+        password = data.get('password')
         
         if username in users and users[username]['password'] == password:
             session['user'] = username
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
         else:
-            flash('Invalid credentials. Try demo/demo', 'error')
+            flash('Invalid username or password!', 'error')
     
     return render_template('login.html')
 
@@ -84,16 +115,42 @@ def dashboard():
     user = session['user']
     user_transactions = transactions.get(user, [])
     user_budgets = budgets.get(user, {})
+    user_goals = goals.get(user, [])
     
     total_spent = sum(t['amount'] for t in user_transactions)
     total_budget = sum(user_budgets.values())
     
+    # Calculate spending trends
+    recent_transactions = user_transactions[-7:] if len(user_transactions) >= 7 else user_transactions
+    weekly_spending = sum(t['amount'] for t in recent_transactions)
+    
+    # Category breakdown
+    category_spending = defaultdict(float)
+    for transaction in user_transactions:
+        category_spending[transaction['category']] += transaction['amount']
+    
+    # Budget progress
+    budget_progress = {}
+    for category, budget_amount in user_budgets.items():
+        spent = category_spending.get(category, 0)
+        progress = (spent / budget_amount * 100) if budget_amount > 0 else 0
+        budget_progress[category] = {
+            'spent': spent,
+            'budget': budget_amount,
+            'progress': min(progress, 100),
+            'remaining': max(budget_amount - spent, 0)
+        }
+    
     return render_template('dashboard.html', 
                          transactions=user_transactions,
                          budgets=user_budgets,
+                         goals=user_goals,
                          total_spent=total_spent,
                          total_budget=total_budget,
-                         income=users[user]['income'])
+                         weekly_spending=weekly_spending,
+                         income=users[user]['income'],
+                         category_spending=dict(category_spending),
+                         budget_progress=budget_progress)
 
 @app.route('/add_transaction', methods=['GET', 'POST'])
 def add_transaction():
@@ -109,13 +166,15 @@ def add_transaction():
             'description': data.get('description'),
             'amount': float(data.get('amount')),
             'category': data.get('category'),
-            'date': data.get('date', datetime.now().strftime('%Y-%m-%d'))
+            'date': data.get('date', datetime.now().strftime('%Y-%m-%d')),
+            'created_at': datetime.now().isoformat()
         }
         
         if user not in transactions:
             transactions[user] = []
         transactions[user].append(new_transaction)
         
+        save_data(transactions, TRANSACTIONS_FILE)
         flash('Transaction added successfully!', 'success')
         return redirect(url_for('dashboard'))
     
@@ -135,9 +194,13 @@ def set_budget():
             'Transportation': float(data.get('transportation', 0)),
             'Entertainment': float(data.get('entertainment', 0)),
             'Utilities': float(data.get('utilities', 0)),
-            'Shopping': float(data.get('shopping', 0))
+            'Shopping': float(data.get('shopping', 0)),
+            'Healthcare': float(data.get('healthcare', 0)),
+            'Education': float(data.get('education', 0)),
+            'Other': float(data.get('other', 0))
         }
         
+        save_data(budgets, BUDGETS_FILE)
         flash('Budget updated successfully!', 'success')
         return redirect(url_for('dashboard'))
     
@@ -156,8 +219,19 @@ def spending_analysis():
     for transaction in user_transactions:
         category_spending[transaction['category']] += transaction['amount']
     
+    # Monthly trends
+    monthly_spending = defaultdict(float)
+    for transaction in user_transactions:
+        month = transaction['date'][:7]  # YYYY-MM
+        monthly_spending[month] += transaction['amount']
+    
+    # Top spending categories
+    top_categories = sorted(category_spending.items(), key=lambda x: x[1], reverse=True)[:5]
+    
     return render_template('spending_analysis.html', 
                          category_spending=dict(category_spending),
+                         monthly_spending=dict(monthly_spending),
+                         top_categories=top_categories,
                          transactions=user_transactions)
 
 @app.route('/ml_recommendations')
@@ -169,21 +243,20 @@ def ml_recommendations():
     user_transactions = transactions.get(user, [])
     user_budgets = budgets.get(user, {})
     
-    # Simple analytics
+    # Advanced analytics
     total_spent = sum(t['amount'] for t in user_transactions)
     income = users[user]['income']
     
     recommendations = []
     
-    if total_spent > income * 0.8:
+    # Spending ratio analysis
+    spending_ratio = (total_spent / income * 100) if income > 0 else 0
+    if spending_ratio > 80:
         recommendations.append("⚠️ You're spending more than 80% of your income. Consider reducing expenses.")
+    elif spending_ratio > 60:
+        recommendations.append("💰 You're spending 60-80% of your income. Monitor your spending closely.")
     
-    if user_transactions:
-        avg_daily = total_spent / len(user_transactions)
-        if avg_daily > 50:
-            recommendations.append("💰 Your average daily spending is high. Try to reduce daily expenses.")
-    
-    # Category recommendations
+    # Category analysis
     category_spending = defaultdict(float)
     for transaction in user_transactions:
         category_spending[transaction['category']] += transaction['amount']
@@ -192,11 +265,117 @@ def ml_recommendations():
         spent = category_spending.get(category, 0)
         if spent > budget * 0.9:
             recommendations.append(f"📊 {category} spending is approaching budget limit.")
+        elif spent > budget * 0.7:
+            recommendations.append(f"⚠️ {category} spending is at 70% of budget.")
+    
+    # Spending pattern analysis
+    if user_transactions:
+        avg_daily = total_spent / len(user_transactions)
+        if avg_daily > 50:
+            recommendations.append("💰 Your average daily spending is high. Try to reduce daily expenses.")
+        
+        # Identify highest spending category
+        if category_spending:
+            highest_category = max(category_spending.items(), key=lambda x: x[1])
+            recommendations.append(f"🎯 Your highest spending category is {highest_category[0]} (${highest_category[1]:.2f}). Consider setting a specific budget for this category.")
+    
+    # Savings recommendations
+    if income > 0:
+        savings_rate = ((income - total_spent) / income * 100)
+        if savings_rate < 10:
+            recommendations.append("💡 Consider increasing your savings rate. Aim for at least 10-20% of your income.")
+        elif savings_rate > 30:
+            recommendations.append("🎉 Excellent savings rate! You're on track for financial success.")
     
     return render_template('ml_recommendations.html', 
                          recommendations=recommendations,
                          total_spent=total_spent,
-                         income=income)
+                         income=income,
+                         spending_ratio=spending_ratio)
+
+@app.route('/goals')
+def goals_page():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    user = session['user']
+    user_goals = goals.get(user, [])
+    
+    return render_template('goals.html', goals=user_goals)
+
+@app.route('/add_goal', methods=['POST'])
+def add_goal():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    user = session['user']
+    data = request.form
+    
+    new_goal = {
+        'id': len(goals.get(user, [])) + 1,
+        'title': data.get('title'),
+        'target_amount': float(data.get('target_amount')),
+        'current_amount': 0,
+        'deadline': data.get('deadline'),
+        'category': data.get('category'),
+        'created_at': datetime.now().isoformat()
+    }
+    
+    if user not in goals:
+        goals[user] = []
+    goals[user].append(new_goal)
+    
+    save_data(goals, GOALS_FILE)
+    flash('Goal added successfully!', 'success')
+    return redirect(url_for('goals_page'))
+
+@app.route('/update_goal_progress', methods=['POST'])
+def update_goal_progress():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    user = session['user']
+    data = request.form
+    goal_id = int(data.get('goal_id'))
+    amount = float(data.get('amount'))
+    
+    for goal in goals.get(user, []):
+        if goal['id'] == goal_id:
+            goal['current_amount'] += amount
+            break
+    
+    save_data(goals, GOALS_FILE)
+    flash('Goal progress updated!', 'success')
+    return redirect(url_for('goals_page'))
+
+@app.route('/export_data')
+def export_data():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    user = session['user']
+    user_transactions = transactions.get(user, [])
+    
+    # Create CSV data
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Date', 'Description', 'Category', 'Amount'])
+    
+    for transaction in user_transactions:
+        writer.writerow([
+            transaction['date'],
+            transaction['description'],
+            transaction['category'],
+            transaction['amount']
+        ])
+    
+    output.seek(0)
+    return send_file(
+        io.BytesIO(output.getvalue().encode('utf-8')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=f'budget_data_{user}_{datetime.now().strftime("%Y%m%d")}.csv'
+    )
 
 @app.route('/logout')
 def logout():
@@ -217,7 +396,9 @@ def api_index():
             "add_transaction": "/add_transaction",
             "set_budget": "/set_budget",
             "ml_recommendations": "/ml_recommendations",
-            "spending_analysis": "/spending_analysis"
+            "spending_analysis": "/spending_analysis",
+            "goals": "/goals",
+            "export_data": "/export_data"
         }
     })
 

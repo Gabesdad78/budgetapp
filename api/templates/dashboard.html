@@ -42,10 +42,10 @@
         <div class="stats-card">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h6 class="mb-1">Budget Set</h6>
-                    <h3 class="mb-0">${{ "%.2f"|format(total_budget) }}</h3>
+                    <h6 class="mb-1">Weekly Spending</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(weekly_spending) }}</h3>
                 </div>
-                <i class="fas fa-piggy-bank fa-2x opacity-75"></i>
+                <i class="fas fa-calendar-week fa-2x opacity-75"></i>
             </div>
         </div>
     </div>
@@ -71,9 +71,14 @@
                 <h5 class="mb-0">
                     <i class="fas fa-list me-2"></i>Recent Transactions
                 </h5>
-                <a href="{{ url_for('add_transaction') }}" class="btn btn-primary btn-sm">
-                    <i class="fas fa-plus me-1"></i>Add Transaction
-                </a>
+                <div>
+                    <a href="{{ url_for('add_transaction') }}" class="btn btn-primary btn-sm me-2">
+                        <i class="fas fa-plus me-1"></i>Add Transaction
+                    </a>
+                    <a href="{{ url_for('export_data') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-download me-1"></i>Export
+                    </a>
+                </div>
             </div>
             <div class="card-body">
                 {% if transactions %}
@@ -108,25 +113,28 @@
         </div>
     </div>
     
-    <!-- Budget Overview -->
+    <!-- Budget Progress & Goals -->
     <div class="col-lg-4">
-        <div class="card">
+        <!-- Budget Progress -->
+        <div class="card mb-3">
             <div class="card-header">
                 <h5 class="mb-0">
-                    <i class="fas fa-chart-pie me-2"></i>Budget Overview
+                    <i class="fas fa-chart-pie me-2"></i>Budget Progress
                 </h5>
             </div>
             <div class="card-body">
-                {% if budgets %}
-                    {% for category, budget in budgets.items() %}
+                {% if budget_progress %}
+                    {% for category, progress in budget_progress.items() %}
                     <div class="mb-3">
                         <div class="d-flex justify-content-between mb-1">
                             <span class="fw-medium">{{ category }}</span>
-                            <span class="text-muted">${{ "%.2f"|format(budget) }}</span>
+                            <span class="text-muted">${{ "%.2f"|format(progress.spent) }}/${{ "%.2f"|format(progress.budget) }}</span>
                         </div>
                         <div class="progress">
-                            <div class="progress-bar bg-success" style="width: 25%"></div>
+                            <div class="progress-bar {% if progress.progress > 90 %}bg-danger{% elif progress.progress > 75 %}bg-warning{% else %}bg-success{% endif %}" 
+                                 style="width: {{ progress.progress }}%"></div>
                         </div>
+                        <small class="text-muted">${{ "%.2f"|format(progress.remaining) }} remaining</small>
                     </div>
                     {% endfor %}
                     
@@ -146,6 +154,51 @@
                 {% endif %}
             </div>
         </div>
+        
+        <!-- Goals Overview -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-bullseye me-2"></i>Financial Goals
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if goals %}
+                    {% for goal in goals[:3] %}
+                    <div class="mb-3">
+                        <h6 class="mb-1">{{ goal.title }}</h6>
+                        <div class="progress mb-1" style="height: 8px;">
+                            {% set progress = (goal.current_amount / goal.target_amount * 100) if goal.target_amount > 0 else 0 %}
+                            <div class="progress-bar bg-primary" style="width: {{ min(progress, 100) }}%"></div>
+                        </div>
+                        <small class="text-muted">
+                            ${{ "%.2f"|format(goal.current_amount) }} of ${{ "%.2f"|format(goal.target_amount) }}
+                        </small>
+                    </div>
+                    {% endfor %}
+                    
+                    {% if goals|length > 3 %}
+                    <div class="text-center">
+                        <small class="text-muted">+{{ goals|length - 3 }} more goals</small>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('goals_page') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-eye me-1"></i>View All Goals
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-bullseye fa-2x text-muted mb-2"></i>
+                        <p class="text-muted small mb-0">No goals set yet.</p>
+                        <a href="{{ url_for('goals_page') }}" class="btn btn-outline-primary btn-sm mt-2">
+                            <i class="fas fa-plus me-1"></i>Set Goals
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
 
@@ -158,24 +211,34 @@
                     <i class="fas fa-bolt me-2"></i>Quick Actions
                 </h5>
                 <div class="row g-3">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <a href="{{ url_for('add_transaction') }}" class="btn btn-outline-primary w-100">
                             <i class="fas fa-plus me-2"></i>Add Transaction
                         </a>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <a href="{{ url_for('set_budget') }}" class="btn btn-outline-success w-100">
                             <i class="fas fa-cog me-2"></i>Set Budget
                         </a>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <a href="{{ url_for('spending_analysis') }}" class="btn btn-outline-info w-100">
                             <i class="fas fa-chart-pie me-2"></i>View Analysis
                         </a>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <a href="{{ url_for('ml_recommendations') }}" class="btn btn-outline-warning w-100">
                             <i class="fas fa-lightbulb me-2"></i>Get Tips
+                        </a>
+                    </div>
+                    <div class="col-md-2">
+                        <a href="{{ url_for('goals_page') }}" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-bullseye me-2"></i>Goals
+                        </a>
+                    </div>
+                    <div class="col-md-2">
+                        <a href="{{ url_for('export_data') }}" class="btn btn-outline-dark w-100">
+                            <i class="fas fa-download me-2"></i>Export Data
                         </a>
                     </div>
                 </div>

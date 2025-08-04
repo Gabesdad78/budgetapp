@@ -123,44 +123,77 @@ def dashboard():
         return redirect(url_for('login'))
     
     user = session['user']
+    
+    # Ensure user exists in all data structures
+    if user not in users:
+        flash('User data not found. Please register again.', 'error')
+        session.pop('user', None)
+        return redirect(url_for('login'))
+    
+    # Initialize user data if missing
+    if user not in transactions:
+        transactions[user] = []
+    if user not in budgets:
+        budgets[user] = {}
+    if user not in goals:
+        goals[user] = []
+    
     user_transactions = transactions.get(user, [])
     user_budgets = budgets.get(user, {})
     user_goals = goals.get(user, [])
     
-    total_spent = sum(t['amount'] for t in user_transactions)
-    total_budget = sum(user_budgets.values())
+    # Safe calculations with error handling
+    try:
+        total_spent = sum(t.get('amount', 0) for t in user_transactions if isinstance(t, dict))
+        total_budget = sum(user_budgets.values())
+        
+        # Calculate spending trends
+        recent_transactions = user_transactions[-7:] if len(user_transactions) >= 7 else user_transactions
+        weekly_spending = sum(t.get('amount', 0) for t in recent_transactions if isinstance(t, dict))
+        
+        # Category breakdown
+        category_spending = defaultdict(float)
+        for transaction in user_transactions:
+            if isinstance(transaction, dict) and 'category' in transaction and 'amount' in transaction:
+                category_spending[transaction['category']] += transaction['amount']
+        
+        # Budget progress
+        budget_progress = {}
+        for category, budget_amount in user_budgets.items():
+            spent = category_spending.get(category, 0)
+            progress = (spent / budget_amount * 100) if budget_amount > 0 else 0
+            budget_progress[category] = {
+                'spent': spent,
+                'budget': budget_amount,
+                'progress': min(progress, 100),
+                'remaining': max(budget_amount - spent, 0)
+            }
+        
+        return render_template('dashboard.html', 
+                             transactions=user_transactions,
+                             budgets=user_budgets,
+                             goals=user_goals,
+                             total_spent=total_spent,
+                             total_budget=total_budget,
+                             weekly_spending=weekly_spending,
+                             income=users[user].get('income', 0),
+                             category_spending=dict(category_spending),
+                             budget_progress=budget_progress)
     
-    # Calculate spending trends
-    recent_transactions = user_transactions[-7:] if len(user_transactions) >= 7 else user_transactions
-    weekly_spending = sum(t['amount'] for t in recent_transactions)
-    
-    # Category breakdown
-    category_spending = defaultdict(float)
-    for transaction in user_transactions:
-        category_spending[transaction['category']] += transaction['amount']
-    
-    # Budget progress
-    budget_progress = {}
-    for category, budget_amount in user_budgets.items():
-        spent = category_spending.get(category, 0)
-        progress = (spent / budget_amount * 100) if budget_amount > 0 else 0
-        budget_progress[category] = {
-            'spent': spent,
-            'budget': budget_amount,
-            'progress': min(progress, 100),
-            'remaining': max(budget_amount - spent, 0)
-        }
-    
-    return render_template('dashboard.html', 
-                         transactions=user_transactions,
-                         budgets=user_budgets,
-                         goals=user_goals,
-                         total_spent=total_spent,
-                         total_budget=total_budget,
-                         weekly_spending=weekly_spending,
-                         income=users[user]['income'],
-                         category_spending=dict(category_spending),
-                         budget_progress=budget_progress)
+    except Exception as e:
+        # Log the error and provide a safe fallback
+        print(f"Dashboard error for user {user}: {str(e)}")
+        flash('There was an error loading your dashboard. Please try again.', 'error')
+        return render_template('dashboard.html', 
+                             transactions=[],
+                             budgets={},
+                             goals=[],
+                             total_spent=0,
+                             total_budget=0,
+                             weekly_spending=0,
+                             income=0,
+                             category_spending={},
+                             budget_progress={})
 
 @app.route('/add_transaction', methods=['GET', 'POST'])
 def add_transaction():
@@ -224,27 +257,46 @@ def spending_analysis():
         return redirect(url_for('login'))
     
     user = session['user']
+    
+    # Ensure user exists
+    if user not in users:
+        flash('User data not found. Please register again.', 'error')
+        session.pop('user', None)
+        return redirect(url_for('login'))
+    
     user_transactions = transactions.get(user, [])
     
-    # Calculate spending by category
-    category_spending = defaultdict(float)
-    for transaction in user_transactions:
-        category_spending[transaction['category']] += transaction['amount']
+    try:
+        # Calculate spending by category
+        category_spending = defaultdict(float)
+        for transaction in user_transactions:
+            if isinstance(transaction, dict) and 'category' in transaction and 'amount' in transaction:
+                category_spending[transaction['category']] += transaction['amount']
+        
+        # Monthly trends
+        monthly_spending = defaultdict(float)
+        for transaction in user_transactions:
+            if isinstance(transaction, dict) and 'date' in transaction and 'amount' in transaction:
+                month = transaction['date'][:7]  # YYYY-MM
+                monthly_spending[month] += transaction['amount']
+        
+        # Top spending categories
+        top_categories = sorted(category_spending.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        return render_template('spending_analysis.html', 
+                             category_spending=dict(category_spending),
+                             monthly_spending=dict(monthly_spending),
+                             top_categories=top_categories,
+                             transactions=user_transactions)
     
-    # Monthly trends
-    monthly_spending = defaultdict(float)
-    for transaction in user_transactions:
-        month = transaction['date'][:7]  # YYYY-MM
-        monthly_spending[month] += transaction['amount']
-    
-    # Top spending categories
-    top_categories = sorted(category_spending.items(), key=lambda x: x[1], reverse=True)[:5]
-    
-    return render_template('spending_analysis.html', 
-                         category_spending=dict(category_spending),
-                         monthly_spending=dict(monthly_spending),
-                         top_categories=top_categories,
-                         transactions=user_transactions)
+    except Exception as e:
+        print(f"Spending analysis error for user {user}: {str(e)}")
+        flash('There was an error loading spending analysis. Please try again.', 'error')
+        return render_template('spending_analysis.html', 
+                             category_spending={},
+                             monthly_spending={},
+                             top_categories=[],
+                             transactions=[])
 
 @app.route('/ml_recommendations')
 def ml_recommendations():
@@ -252,58 +304,76 @@ def ml_recommendations():
         return redirect(url_for('login'))
     
     user = session['user']
+    
+    # Ensure user exists
+    if user not in users:
+        flash('User data not found. Please register again.', 'error')
+        session.pop('user', None)
+        return redirect(url_for('login'))
+    
     user_transactions = transactions.get(user, [])
     user_budgets = budgets.get(user, {})
     
-    # Advanced analytics
-    total_spent = sum(t['amount'] for t in user_transactions)
-    income = users[user]['income']
-    
-    recommendations = []
-    
-    # Spending ratio analysis
-    spending_ratio = (total_spent / income * 100) if income > 0 else 0
-    if spending_ratio > 80:
-        recommendations.append("⚠️ You're spending more than 80% of your income. Consider reducing expenses.")
-    elif spending_ratio > 60:
-        recommendations.append("💰 You're spending 60-80% of your income. Monitor your spending closely.")
-    
-    # Category analysis
-    category_spending = defaultdict(float)
-    for transaction in user_transactions:
-        category_spending[transaction['category']] += transaction['amount']
-    
-    for category, budget in user_budgets.items():
-        spent = category_spending.get(category, 0)
-        if spent > budget * 0.9:
-            recommendations.append(f"📊 {category} spending is approaching budget limit.")
-        elif spent > budget * 0.7:
-            recommendations.append(f"⚠️ {category} spending is at 70% of budget.")
-    
-    # Spending pattern analysis
-    if user_transactions:
-        avg_daily = total_spent / len(user_transactions)
-        if avg_daily > 50:
-            recommendations.append("💰 Your average daily spending is high. Try to reduce daily expenses.")
+    # Advanced analytics with error handling
+    try:
+        total_spent = sum(t.get('amount', 0) for t in user_transactions if isinstance(t, dict))
+        income = users[user].get('income', 0)
         
-        # Identify highest spending category
-        if category_spending:
-            highest_category = max(category_spending.items(), key=lambda x: x[1])
-            recommendations.append(f"🎯 Your highest spending category is {highest_category[0]} (${highest_category[1]:.2f}). Consider setting a specific budget for this category.")
+        recommendations = []
+        
+        # Spending ratio analysis
+        spending_ratio = (total_spent / income * 100) if income > 0 else 0
+        if spending_ratio > 80:
+            recommendations.append("⚠️ You're spending more than 80% of your income. Consider reducing expenses.")
+        elif spending_ratio > 60:
+            recommendations.append("💰 You're spending 60-80% of your income. Monitor your spending closely.")
+        
+        # Category analysis
+        category_spending = defaultdict(float)
+        for transaction in user_transactions:
+            if isinstance(transaction, dict) and 'category' in transaction and 'amount' in transaction:
+                category_spending[transaction['category']] += transaction['amount']
+        
+        for category, budget in user_budgets.items():
+            spent = category_spending.get(category, 0)
+            if spent > budget * 0.9:
+                recommendations.append(f"📊 {category} spending is approaching budget limit.")
+            elif spent > budget * 0.7:
+                recommendations.append(f"⚠️ {category} spending is at 70% of budget.")
+        
+        # Spending pattern analysis
+        if user_transactions:
+            avg_daily = total_spent / len(user_transactions)
+            if avg_daily > 50:
+                recommendations.append("💰 Your average daily spending is high. Try to reduce daily expenses.")
+            
+            # Identify highest spending category
+            if category_spending:
+                highest_category = max(category_spending.items(), key=lambda x: x[1])
+                recommendations.append(f"🎯 Your highest spending category is {highest_category[0]} (${highest_category[1]:.2f}). Consider setting a specific budget for this category.")
+        
+        # Savings recommendations
+        if income > 0:
+            savings_rate = ((income - total_spent) / income * 100)
+            if savings_rate < 10:
+                recommendations.append("💡 Consider increasing your savings rate. Aim for at least 10-20% of your income.")
+            elif savings_rate > 30:
+                recommendations.append("🎉 Excellent savings rate! You're on track for financial success.")
+        
+        return render_template('ml_recommendations.html', 
+                             recommendations=recommendations,
+                             total_spent=total_spent,
+                             income=income,
+                             spending_ratio=spending_ratio)
     
-    # Savings recommendations
-    if income > 0:
-        savings_rate = ((income - total_spent) / income * 100)
-        if savings_rate < 10:
-            recommendations.append("💡 Consider increasing your savings rate. Aim for at least 10-20% of your income.")
-        elif savings_rate > 30:
-            recommendations.append("🎉 Excellent savings rate! You're on track for financial success.")
-    
-    return render_template('ml_recommendations.html', 
-                         recommendations=recommendations,
-                         total_spent=total_spent,
-                         income=income,
-                         spending_ratio=spending_ratio)
+    except Exception as e:
+        print(f"ML recommendations error for user {user}: {str(e)}")
+        flash('There was an error loading recommendations. Please try again.', 'error')
+        return render_template('ml_recommendations.html', 
+                             recommendations=["💡 Start by adding some transactions to get personalized recommendations!"],
+                             total_spent=0,
+                             income=0,
+                             spending_ratio=0)
 
 @app.route('/goals')
 def goals_page():

@@ -534,16 +534,25 @@ def ml_recommendations():
         user_transactions = [t for t in transactions if t.get('user_id') == user_id]
         user_budgets = budgets.get(user_id, {})
         
+        # Get user data for income
+        user_data = None
+        for username, user in users.items():
+            if user.get('id') == user_id:
+                user_data = user
+                break
+        
+        income = user_data.get('income', 0) if user_data else 0
+        total_spent = sum(t.get('amount', 0) for t in user_transactions)
+        
         # Simple recommendations
         recommendations = []
-        total_spent = sum(t['amount'] for t in user_transactions)
         
         if total_spent > 0:
             # Top spending category
             category_spending = {}
             for transaction in user_transactions:
-                category = transaction['category']
-                amount = transaction['amount']
+                category = transaction.get('category', 'Other')
+                amount = transaction.get('amount', 0)
                 category_spending[category] = category_spending.get(category, 0) + amount
             
             if category_spending:
@@ -557,12 +566,18 @@ def ml_recommendations():
                     'suggestion': f'Consider reducing {top_category} expenses to save more'
                 })
         
-        return render_template('ml_recommendations.html', recommendations=recommendations)
+        return render_template('ml_recommendations.html', 
+                             recommendations=recommendations,
+                             income=income,
+                             total_spent=total_spent)
     except Exception as e:
         print(f"ML recommendations error: {e}")
         print(traceback.format_exc())
         flash('An error occurred loading recommendations. Please try again.', 'error')
-        return render_template('ml_recommendations.html', recommendations=[])
+        return render_template('ml_recommendations.html', 
+                             recommendations=[],
+                             income=0,
+                             total_spent=0)
 
 @app.route('/goals')
 def goals_page():

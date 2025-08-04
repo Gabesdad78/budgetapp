@@ -396,14 +396,26 @@ def dashboard():
         total_spent = sum(t.get('amount', 0) for t in user_transactions)
         total_budget = sum(user_budgets.values())
         
+        # Calculate weekly spending (last 7 days)
+        from datetime import datetime, timedelta
+        week_ago = datetime.now() - timedelta(days=7)
+        weekly_transactions = [t for t in user_transactions if datetime.fromisoformat(t.get('date', '2023-01-01')) >= week_ago]
+        weekly_spending = sum(t.get('amount', 0) for t in weekly_transactions)
+        
+        # Get user income
+        income = user_data.get('income', 0)
+        
         print(f"Dashboard data - transactions: {len(user_transactions)}, budgets: {len(user_budgets)}, goals: {len(user_goals)}")
+        print(f"Stats - income: {income}, total_spent: {total_spent}, weekly_spending: {weekly_spending}")
         
         return render_template('dashboard.html', 
                              transactions=user_transactions[-5:],
                              budgets=user_budgets,
                              goals=user_goals,
                              total_spent=total_spent,
-                             total_budget=total_budget)
+                             total_budget=total_budget,
+                             income=income,
+                             weekly_spending=weekly_spending)
     except Exception as e:
         print(f"Dashboard error: {e}")
         print(traceback.format_exc())
@@ -413,7 +425,9 @@ def dashboard():
                              budgets={},
                              goals=[],
                              total_spent=0,
-                             total_budget=0)
+                             total_budget=0,
+                             income=0,
+                             weekly_spending=0)
 
 @app.route('/add_transaction', methods=['GET', 'POST'])
 def add_transaction():

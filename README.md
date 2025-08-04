@@ -1,6 +1,6 @@
-# 💰 ML Budget App
+# 💰 Smart Budget App
 
-A powerful machine learning budget management application that helps you control spending, allocate funds, and predict future expenses using AI.
+A powerful budget management application that helps you control spending, allocate funds, and get smart recommendations using analytics.
 
 ## 🚀 Live Demo
 
@@ -14,10 +14,10 @@ A powerful machine learning budget management application that helps you control
 - **User Authentication**: Secure registration and login system
 - **Real-time Analytics**: Interactive charts and spending insights
 
-### 🤖 Machine Learning Features
-- **Spending Predictions**: AI-powered forecasting of future expenses
+### 🤖 Smart Analytics Features
+- **Spending Predictions**: AI-powered forecasting based on historical data
 - **Budget Recommendations**: Smart suggestions based on spending patterns
-- **Pattern Analysis**: Identify spending trends and anomalies
+- **Pattern Analysis**: Identify spending trends and averages
 
 ### 📊 Analytics & Visualization
 - **Interactive Charts**: Doughnut charts for category breakdown
@@ -29,7 +29,7 @@ A powerful machine learning budget management application that helps you control
 - **Backend**: Flask, SQLAlchemy, Flask-Login
 - **Frontend**: HTML5, CSS3, JavaScript, Bootstrap 5
 - **Database**: SQLite
-- **Machine Learning**: Scikit-learn, Pandas, NumPy
+- **Analytics**: Custom algorithms for spending analysis
 - **Charts**: Chart.js
 - **Deployment**: Vercel
 
@@ -75,10 +75,10 @@ A powerful machine learning budget management application that helps you control
 - Categorize transactions for better organization
 - Search and filter transaction history
 
-### Machine Learning Insights
-- **Spending Predictions**: AI analyzes your spending patterns to predict future expenses
+### Smart Analytics
+- **Spending Predictions**: Analyzes your spending patterns to predict future expenses
 - **Budget Recommendations**: Get smart suggestions for budget allocation
-- **Pattern Recognition**: Identify unusual spending patterns
+- **Pattern Recognition**: Identify spending trends and averages
 
 ## 📋 Project Structure
 

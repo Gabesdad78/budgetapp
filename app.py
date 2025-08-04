@@ -2,15 +2,10 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, f
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-import pandas as pd
-import numpy as np
-from sklearn.ensemble import GradientBoostingRegressor
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score
 import os
 from datetime import datetime, timedelta
 import json
+from collections import defaultdict
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
@@ -50,72 +45,63 @@ class Budget(db.Model):
     amount = db.Column(db.Float, nullable=False)
     month = db.Column(db.String(7), nullable=False)
 
-class MLModel:
+class SimpleAnalytics:
     def __init__(self):
-        self.model = None
-        self.scaler = StandardScaler()
-        self.label_encoder = LabelEncoder()
-        self.is_trained = False
-        
-    def prepare_data(self, transactions_df):
-        """Prepare transaction data for ML model"""
-        transactions_df['month'] = pd.to_datetime(transactions_df['date']).dt.month
-        transactions_df['day_of_week'] = pd.to_datetime(transactions_df['date']).dt.dayofweek
-        transactions_df['day_of_month'] = pd.to_datetime(transactions_df['date']).dt.day
-        transactions_df['category_encoded'] = self.label_encoder.fit_transform(transactions_df['category'])
-        transactions_df['is_weekend'] = transactions_df['day_of_week'].isin([5, 6]).astype(int)
-        transactions_df['is_month_start'] = (transactions_df['day_of_month'] <= 5).astype(int)
-        transactions_df['is_month_end'] = (transactions_df['day_of_month'] >= 25).astype(int)
-        return transactions_df
+        pass
     
-    def train_model(self, transactions_df):
-        """Train the ML model on transaction data"""
-        if len(transactions_df) < 10:
-            return False
-            
-        df = self.prepare_data(transactions_df)
-        features = ['month', 'day_of_week', 'day_of_month', 'category_encoded', 
-                   'is_weekend', 'is_month_start', 'is_month_end']
+    def calculate_averages(self, transactions):
+        """Calculate simple spending averages by category"""
+        if not transactions:
+            return {}
         
-        X = df[features]
-        y = df['amount']
+        category_totals = defaultdict(float)
+        category_counts = defaultdict(int)
         
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        X_train_scaled = self.scaler.fit_transform(X_train)
-        X_test_scaled = self.scaler.transform(X_test)
+        for transaction in transactions:
+            if transaction.transaction_type == 'expense':
+                category_totals[transaction.category] += transaction.amount
+                category_counts[transaction.category] += 1
         
-        self.model = GradientBoostingRegressor(n_estimators=100, random_state=42)
-        self.model.fit(X_train_scaled, y_train)
+        averages = {}
+        for category in category_totals:
+            if category_counts[category] > 0:
+                averages[category] = category_totals[category] / category_counts[category]
         
-        y_pred = self.model.predict(X_test_scaled)
-        mse = mean_squared_error(y_test, y_pred)
-        r2 = r2_score(y_test, y_pred)
-        
-        self.is_trained = True
-        return True
+        return averages
     
-    def predict_spending(self, category, date):
-        """Predict spending for a given category and date"""
-        if not self.is_trained:
-            return None
-            
-        input_data = pd.DataFrame({
-            'month': [date.month],
-            'day_of_week': [date.weekday()],
-            'day_of_month': [date.day],
-            'category_encoded': [self.label_encoder.transform([category])[0]],
-            'is_weekend': [1 if date.weekday() in [5, 6] else 0],
-            'is_month_start': [1 if date.day <= 5 else 0],
-            'is_month_end': [1 if date.day >= 25 else 0]
-        })
+    def predict_simple_budget(self, transactions, category):
+        """Simple budget prediction based on historical averages"""
+        if not transactions:
+            return 0
         
-        input_scaled = self.scaler.transform(input_data)
-        prediction = self.model.predict(input_scaled)[0]
+        category_transactions = [t for t in transactions 
+                               if t.category == category and t.transaction_type == 'expense']
         
-        return max(0, prediction)
+        if not category_transactions:
+            return 0
+        
+        total = sum(t.amount for t in category_transactions)
+        avg = total / len(category_transactions)
+        
+        # Simple prediction: average + 10% buffer
+        return avg * 1.1
+    
+    def get_spending_trends(self, transactions):
+        """Get simple spending trends by month"""
+        if not transactions:
+            return {}
+        
+        monthly_spending = defaultdict(float)
+        
+        for transaction in transactions:
+            if transaction.transaction_type == 'expense':
+                month_key = transaction.date.strftime('%Y-%m')
+                monthly_spending[month_key] += transaction.amount
+        
+        return dict(monthly_spending)
 
-# Initialize ML model
-ml_model = MLModel()
+# Initialize analytics
+analytics = SimpleAnalytics()
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -215,13 +201,6 @@ def add_transaction():
     db.session.add(transaction)
     db.session.commit()
     
-    transactions_df = pd.read_sql(
-        Transaction.query.filter_by(user_id=current_user.id).statement,
-        db.engine
-    )
-    if len(transactions_df) > 0:
-        ml_model.train_model(transactions_df)
-    
     flash('Transaction added successfully!')
     return redirect(url_for('dashboard'))
 
@@ -256,50 +235,55 @@ def set_budget():
 @app.route('/ml_recommendations')
 @login_required
 def ml_recommendations():
-    transactions_df = pd.read_sql(
-        Transaction.query.filter_by(user_id=current_user.id).statement,
-        db.engine
-    )
+    transactions = Transaction.query.filter_by(user_id=current_user.id).all()
     
-    if len(transactions_df) < 10:
-        return jsonify({'error': 'Not enough transaction data for ML recommendations'})
+    if len(transactions) < 3:
+        return jsonify({'error': 'Not enough transaction data for recommendations'})
     
-    if not ml_model.is_trained:
-        ml_model.train_model(transactions_df)
+    # Get unique categories
+    categories = list(set(t.category for t in transactions if t.transaction_type == 'expense'))
     
     recommendations = {}
-    categories = transactions_df['category'].unique()
-    
     for category in categories:
-        next_month = datetime.now() + timedelta(days=30)
-        predicted_spending = ml_model.predict_spending(category, next_month)
-        
-        if predicted_spending:
-            recommendations[category] = {
-                'predicted_spending': round(predicted_spending, 2),
-                'recommended_budget': round(predicted_spending * 1.1, 2)
-            }
+        predicted_budget = analytics.predict_simple_budget(transactions, category)
+        recommendations[category] = {
+            'predicted_spending': round(predicted_budget, 2),
+            'recommended_budget': round(predicted_budget * 1.1, 2)
+        }
     
     return jsonify(recommendations)
 
 @app.route('/spending_analysis')
 @login_required
 def spending_analysis():
-    transactions_df = pd.read_sql(
-        Transaction.query.filter_by(user_id=current_user.id).statement,
-        db.engine
-    )
+    transactions = Transaction.query.filter_by(user_id=current_user.id).all()
     
-    if len(transactions_df) == 0:
+    if len(transactions) == 0:
         return jsonify({'error': 'No transaction data available'})
     
-    expenses_df = transactions_df[transactions_df['transaction_type'] == 'expense']
+    expenses = [t for t in transactions if t.transaction_type == 'expense']
+    
+    if not expenses:
+        return jsonify({'error': 'No expense data available'})
+    
+    total_spent = sum(t.amount for t in expenses)
+    avg_transaction = total_spent / len(expenses)
+    
+    # Calculate top categories
+    category_totals = defaultdict(float)
+    for transaction in expenses:
+        category_totals[transaction.category] += transaction.amount
+    
+    top_categories = dict(sorted(category_totals.items(), key=lambda x: x[1], reverse=True)[:5])
+    
+    # Calculate monthly trends
+    monthly_trends = analytics.get_spending_trends(expenses)
     
     analysis = {
-        'total_spent': float(expenses_df['amount'].sum()),
-        'avg_transaction': float(expenses_df['amount'].mean()),
-        'top_categories': expenses_df.groupby('category')['amount'].sum().nlargest(5).to_dict(),
-        'monthly_trend': expenses_df.groupby(pd.to_datetime(expenses_df['date']).dt.to_period('M'))['amount'].sum().to_dict()
+        'total_spent': float(total_spent),
+        'avg_transaction': float(avg_transaction),
+        'top_categories': top_categories,
+        'monthly_trend': monthly_trends
     }
     
     return jsonify(analysis)

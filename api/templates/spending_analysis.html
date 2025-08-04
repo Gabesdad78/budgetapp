@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Spending Analysis - Smart Budget App{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="fw-bold">
+            <i class="fas fa-chart-pie me-3"></i>Spending Analysis
+        </h1>
+        <p class="text-muted">Analyze your spending patterns and trends.</p>
+    </div>
+</div>
+
+{% if transactions %}
+<div class="row">
+    <!-- Category Breakdown -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>Spending by Category
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if category_spending %}
+                    {% for category, amount in category_spending.items() %}
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="fw-medium">{{ category }}</span>
+                            <span class="text-muted">${{ "%.2f"|format(amount) }}</span>
+                        </div>
+                        <div class="progress">
+                            {% set percentage = (amount / category_spending.values()|sum * 100) %}
+                            <div class="progress-bar bg-primary" style="width: {{ percentage }}%"></div>
+                        </div>
+                        <small class="text-muted">{{ "%.1f"|format(percentage) }}% of total spending</small>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No spending data available.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Transactions -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2"></i>Recent Transactions
+                </h5>
+            </div>
+            <div class="card-body">
+                {% for transaction in transactions[-10:] %}
+                <div class="transaction-item">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h6 class="mb-1">{{ transaction.description }}</h6>
+                            <small class="text-muted">{{ transaction.date }}</small>
+                        </div>
+                        <div class="col-md-3">
+                            <span class="category-badge bg-primary text-white">
+                                {{ transaction.category }}
+                            </span>
+                        </div>
+                        <div class="col-md-3 text-end">
+                            <h6 class="text-danger mb-0">-${{ "%.2f"|format(transaction.amount) }}</h6>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-calculator me-2"></i>Summary Statistics
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-primary">${{ "%.2f"|format(category_spending.values()|sum) }}</h4>
+                            <p class="text-muted mb-0">Total Spent</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-success">{{ transactions|length }}</h4>
+                            <p class="text-muted mb-0">Total Transactions</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-info">${{ "%.2f"|format(category_spending.values()|sum / transactions|length) if transactions else 0 }}</h4>
+                            <p class="text-muted mb-0">Average Transaction</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-warning">{{ category_spending|length }}</h4>
+                            <p class="text-muted mb-0">Categories Used</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-chart-pie fa-4x text-muted mb-4"></i>
+                <h3 class="mb-3">No Data Available</h3>
+                <p class="text-muted mb-4">
+                    You haven't added any transactions yet. Start tracking your spending to see analysis here.
+                </p>
+                <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>Add Your First Transaction
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Back to Dashboard -->
+<div class="row mt-4">
+    <div class="col-12 text-center">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %} 

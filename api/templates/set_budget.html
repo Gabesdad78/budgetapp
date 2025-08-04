@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Set Budget - Smart Budget App{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card">
+            <div class="card-body p-5">
+                <div class="text-center mb-4">
+                    <i class="fas fa-cog feature-icon"></i>
+                    <h2 class="fw-bold">Set Your Budget</h2>
+                    <p class="text-muted">Define spending limits for each category</p>
+                </div>
+                
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="food" class="form-label">Food & Dining</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="food" name="food" 
+                                       placeholder="300" min="0" step="0.01" value="300">
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="transportation" class="form-label">Transportation</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="transportation" name="transportation" 
+                                       placeholder="200" min="0" step="0.01" value="200">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="entertainment" class="form-label">Entertainment</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="entertainment" name="entertainment" 
+                                       placeholder="100" min="0" step="0.01" value="100">
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="utilities" class="form-label">Utilities</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="utilities" name="utilities" 
+                                       placeholder="150" min="0" step="0.01" value="150">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="shopping" class="form-label">Shopping</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control" id="shopping" name="shopping" 
+                                   placeholder="200" min="0" step="0.01" value="200">
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Save Budget
+                        </button>
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                        </a>
+                    </div>
+                </form>
+                
+                <div class="mt-4">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Tip:</strong> Set realistic budgets based on your income and spending habits. 
+                        You can always adjust them later.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

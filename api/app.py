@@ -1,245 +1,224 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template, redirect, url_for, flash, session
+from datetime import datetime
+from collections import defaultdict
+import json
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your-secret-key-here'
 
 # Simple in-memory storage
 users = {}
 transactions = {}
 budgets = {}
 
+# Sample data for demo
+if not users:
+    users['demo'] = {
+        'email': 'demo@example.com',
+        'password': 'password',
+        'income': 5000,
+        'id': 1
+    }
+
+if not transactions:
+    transactions['demo'] = [
+        {'id': 1, 'description': 'Grocery Shopping', 'amount': 120.50, 'category': 'Food', 'date': '2025-08-01'},
+        {'id': 2, 'description': 'Gas Station', 'amount': 45.00, 'category': 'Transportation', 'date': '2025-08-02'},
+        {'id': 3, 'description': 'Netflix Subscription', 'amount': 15.99, 'category': 'Entertainment', 'date': '2025-08-03'}
+    ]
+
+if not budgets:
+    budgets['demo'] = {
+        'Food': 300,
+        'Transportation': 200,
+        'Entertainment': 100,
+        'Utilities': 150,
+        'Shopping': 200
+    }
+
 @app.route('/')
 def index():
-    return jsonify({
-        "message": "Budget App is running!",
-        "status": "success",
-        "endpoints": {
-            "register": "/register",
-            "login": "/login", 
-            "dashboard": "/dashboard",
-            "add_transaction": "/add_transaction",
-            "set_budget": "/set_budget",
-            "ml_recommendations": "/ml_recommendations",
-            "spending_analysis": "/spending_analysis"
-        }
-    })
+    return render_template('index.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        data = request.get_json() or request.form
+        data = request.form
         username = data.get('username', 'demo')
         email = data.get('email', 'demo@example.com')
         password = data.get('password', 'password')
         income = float(data.get('income', 5000))
-        
+
         users[username] = {
             'email': email,
             'password': password,
             'income': income,
             'id': len(users) + 1
         }
-        
-        return jsonify({
-            "message": "Registration successful!",
-            "username": username,
-            "status": "success"
-        })
+        flash('Registration successful! Please login.', 'success')
+        return redirect(url_for('login'))
     
-    return jsonify({
-        "message": "Register endpoint",
-        "method": "POST",
-        "fields": ["username", "email", "password", "income"]
-    })
+    return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        data = request.get_json() or request.form
+        data = request.form
         username = data.get('username', 'demo')
         password = data.get('password', 'password')
         
         if username in users and users[username]['password'] == password:
-            return jsonify({
-                "message": "Login successful!",
-                "username": username,
-                "status": "success"
-            })
+            session['user'] = username
+            flash('Login successful!', 'success')
+            return redirect(url_for('dashboard'))
         else:
-            return jsonify({
-                "message": "Invalid username or password",
-                "status": "error"
-            }), 401
+            flash('Invalid credentials. Try demo/demo', 'error')
     
-    return jsonify({
-        "message": "Login endpoint",
-        "method": "POST",
-        "fields": ["username", "password"]
-    })
+    return render_template('login.html')
 
 @app.route('/dashboard')
 def dashboard():
-    username = request.args.get('username', 'demo')
-    user = users.get(username, {'income': 5000, 'id': 1})
+    if 'user' not in session:
+        return redirect(url_for('login'))
     
-    user_transactions = [t for t in transactions.values() if t.get('user_id') == user['id']]
-    user_budgets = [b for b in budgets.values() if b.get('user_id') == user['id']]
+    user = session['user']
+    user_transactions = transactions.get(user, [])
+    user_budgets = budgets.get(user, {})
     
-    category_spending = {}
-    total_spent = 0
+    total_spent = sum(t['amount'] for t in user_transactions)
+    total_budget = sum(user_budgets.values())
     
-    for transaction in user_transactions:
-        if transaction.get('transaction_type') == 'expense':
-            category = transaction.get('category', 'Other')
-            if category not in category_spending:
-                category_spending[category] = 0
-            category_spending[category] += transaction.get('amount', 0)
-            total_spent += transaction.get('amount', 0)
-    
-    return jsonify({
-        "message": "Dashboard data",
-        "username": username,
-        "income": user['income'],
-        "total_spent": total_spent,
-        "category_spending": category_spending,
-        "recent_transactions": user_transactions[:5],
-        "budgets": user_budgets,
-        "status": "success"
-    })
+    return render_template('dashboard.html', 
+                         transactions=user_transactions,
+                         budgets=user_budgets,
+                         total_spent=total_spent,
+                         total_budget=total_budget,
+                         income=users[user]['income'])
 
-@app.route('/add_transaction', methods=['POST'])
+@app.route('/add_transaction', methods=['GET', 'POST'])
 def add_transaction():
-    data = request.get_json() or request.form
-    username = data.get('username', 'demo')
-    user = users.get(username, {'id': 1})
+    if 'user' not in session:
+        return redirect(url_for('login'))
     
-    amount = float(data.get('amount', 0))
-    category = data.get('category', 'Other')
-    description = data.get('description', 'Transaction')
-    transaction_type = data.get('transaction_type', 'expense')
-    
-    transaction_id = len(transactions) + 1
-    transactions[transaction_id] = {
-        'user_id': user['id'],
-        'amount': amount,
-        'category': category,
-        'description': description,
-        'transaction_type': transaction_type,
-        'date': '2024-01-01'
-    }
-    
-    return jsonify({
-        "message": "Transaction added successfully!",
-        "transaction_id": transaction_id,
-        "status": "success"
-    })
-
-@app.route('/set_budget', methods=['POST'])
-def set_budget():
-    data = request.get_json() or request.form
-    username = data.get('username', 'demo')
-    user = users.get(username, {'id': 1})
-    
-    category = data.get('category', 'Other')
-    amount = float(data.get('amount', 0))
-    
-    budget_id = len(budgets) + 1
-    budgets[budget_id] = {
-        'user_id': user['id'],
-        'category': category,
-        'amount': amount,
-        'month': '2024-01'
-    }
-    
-    return jsonify({
-        "message": "Budget set successfully!",
-        "budget_id": budget_id,
-        "status": "success"
-    })
-
-@app.route('/ml_recommendations')
-def ml_recommendations():
-    username = request.args.get('username', 'demo')
-    user = users.get(username, {'id': 1})
-    
-    user_transactions = [t for t in transactions.values() if t.get('user_id') == user['id']]
-    
-    if len(user_transactions) < 3:
-        return jsonify({
-            "error": "Not enough transaction data for recommendations",
-            "status": "error"
-        })
-    
-    categories = list(set(t.get('category', 'Other') for t in user_transactions if t.get('transaction_type') == 'expense'))
-    
-    recommendations = {}
-    for category in categories:
-        category_transactions = [t for t in user_transactions 
-                               if t.get('category') == category and t.get('transaction_type') == 'expense']
+    if request.method == 'POST':
+        data = request.form
+        user = session['user']
         
-        if category_transactions:
-            total = sum(t.get('amount', 0) for t in category_transactions)
-            avg = total / len(category_transactions)
-            recommendations[category] = {
-                'predicted_spending': round(avg, 2),
-                'recommended_budget': round(avg * 1.1, 2)
-            }
+        new_transaction = {
+            'id': len(transactions.get(user, [])) + 1,
+            'description': data.get('description'),
+            'amount': float(data.get('amount')),
+            'category': data.get('category'),
+            'date': data.get('date', datetime.now().strftime('%Y-%m-%d'))
+        }
+        
+        if user not in transactions:
+            transactions[user] = []
+        transactions[user].append(new_transaction)
+        
+        flash('Transaction added successfully!', 'success')
+        return redirect(url_for('dashboard'))
     
-    return jsonify({
-        "recommendations": recommendations,
-        "status": "success"
-    })
+    return render_template('add_transaction.html')
+
+@app.route('/set_budget', methods=['GET', 'POST'])
+def set_budget():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        data = request.form
+        user = session['user']
+        
+        budgets[user] = {
+            'Food': float(data.get('food', 0)),
+            'Transportation': float(data.get('transportation', 0)),
+            'Entertainment': float(data.get('entertainment', 0)),
+            'Utilities': float(data.get('utilities', 0)),
+            'Shopping': float(data.get('shopping', 0))
+        }
+        
+        flash('Budget updated successfully!', 'success')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('set_budget.html')
 
 @app.route('/spending_analysis')
 def spending_analysis():
-    username = request.args.get('username', 'demo')
-    user = users.get(username, {'id': 1})
+    if 'user' not in session:
+        return redirect(url_for('login'))
     
-    user_transactions = [t for t in transactions.values() if t.get('user_id') == user['id']]
+    user = session['user']
+    user_transactions = transactions.get(user, [])
     
-    if len(user_transactions) == 0:
-        return jsonify({
-            "error": "No transaction data available",
-            "status": "error"
-        })
+    # Calculate spending by category
+    category_spending = defaultdict(float)
+    for transaction in user_transactions:
+        category_spending[transaction['category']] += transaction['amount']
     
-    expenses = [t for t in user_transactions if t.get('transaction_type') == 'expense']
-    
-    if not expenses:
-        return jsonify({
-            "error": "No expense data available",
-            "status": "error"
-        })
-    
-    total_spent = sum(t.get('amount', 0) for t in expenses)
-    avg_transaction = total_spent / len(expenses)
-    
-    category_totals = {}
-    for transaction in expenses:
-        category = transaction.get('category', 'Other')
-        if category not in category_totals:
-            category_totals[category] = 0
-        category_totals[category] += transaction.get('amount', 0)
-    
-    top_categories = dict(sorted(category_totals.items(), key=lambda x: x[1], reverse=True)[:5])
-    
-    analysis = {
-        'total_spent': float(total_spent),
-        'avg_transaction': float(avg_transaction),
-        'top_categories': top_categories,
-        'monthly_trend': {'2024-01': total_spent}
-    }
-    
-    return jsonify({
-        "analysis": analysis,
-        "status": "success"
-    })
+    return render_template('spending_analysis.html', 
+                         category_spending=dict(category_spending),
+                         transactions=user_transactions)
 
-@app.route('/test')
-def test():
+@app.route('/ml_recommendations')
+def ml_recommendations():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    user = session['user']
+    user_transactions = transactions.get(user, [])
+    user_budgets = budgets.get(user, {})
+    
+    # Simple analytics
+    total_spent = sum(t['amount'] for t in user_transactions)
+    income = users[user]['income']
+    
+    recommendations = []
+    
+    if total_spent > income * 0.8:
+        recommendations.append("⚠️ You're spending more than 80% of your income. Consider reducing expenses.")
+    
+    if user_transactions:
+        avg_daily = total_spent / len(user_transactions)
+        if avg_daily > 50:
+            recommendations.append("💰 Your average daily spending is high. Try to reduce daily expenses.")
+    
+    # Category recommendations
+    category_spending = defaultdict(float)
+    for transaction in user_transactions:
+        category_spending[transaction['category']] += transaction['amount']
+    
+    for category, budget in user_budgets.items():
+        spent = category_spending.get(category, 0)
+        if spent > budget * 0.9:
+            recommendations.append(f"📊 {category} spending is approaching budget limit.")
+    
+    return render_template('ml_recommendations.html', 
+                         recommendations=recommendations,
+                         total_spent=total_spent,
+                         income=income)
+
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    flash('Logged out successfully!', 'success')
+    return redirect(url_for('index'))
+
+# API endpoints for JSON responses
+@app.route('/api/')
+def api_index():
     return jsonify({
-        "message": "App is working!",
+        "message": "Budget App API is running!",
         "status": "success",
-        "timestamp": "2024-01-01"
+        "endpoints": {
+            "register": "/register",
+            "login": "/login",
+            "dashboard": "/dashboard",
+            "add_transaction": "/add_transaction",
+            "set_budget": "/set_budget",
+            "ml_recommendations": "/ml_recommendations",
+            "spending_analysis": "/spending_analysis"
+        }
     })
 
 if __name__ == '__main__':

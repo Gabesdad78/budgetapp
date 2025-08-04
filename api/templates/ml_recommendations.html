@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block title %}Smart Recommendations - Smart Budget App{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="fw-bold">
+            <i class="fas fa-lightbulb me-3"></i>Smart Recommendations
+        </h1>
+        <p class="text-muted">Get personalized insights to improve your financial health.</p>
+    </div>
+</div>
+
+<!-- Financial Overview -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Monthly Income</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(income) }}</h3>
+                </div>
+                <i class="fas fa-dollar-sign fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Total Spent</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(total_spent) }}</h3>
+                </div>
+                <i class="fas fa-shopping-cart fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recommendations -->
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-lightbulb me-2"></i>Personalized Recommendations
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recommendations %}
+                    {% for recommendation in recommendations %}
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        {{ recommendation }}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-thumbs-up fa-3x text-success mb-3"></i>
+                        <h4 class="text-success mb-3">Great Job!</h4>
+                        <p class="text-muted">
+                            Your spending looks healthy. Keep up the good work!
+                        </p>
+                    </div>
+                {% endif %}
+                
+                <!-- General Tips -->
+                <div class="mt-4">
+                    <h6 class="fw-bold mb-3">
+                        <i class="fas fa-star me-2"></i>General Financial Tips
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h6 class="fw-bold">
+                                        <i class="fas fa-piggy-bank text-success me-2"></i>50/30/20 Rule
+                                    </h6>
+                                    <p class="small text-muted mb-0">
+                                        50% for needs, 30% for wants, 20% for savings and debt repayment.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <h6 class="fw-bold">
+                                        <i class="fas fa-shield-alt text-primary me-2"></i>Emergency Fund
+                                    </h6>
+                                    <p class="small text-muted mb-0">
+                                        Aim to save 3-6 months of expenses for emergencies.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-3">
+                    <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Add Transaction
+                    </a>
+                    <a href="{{ url_for('set_budget') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-cog me-2"></i>Adjust Budget
+                    </a>
+                    <a href="{{ url_for('spending_analysis') }}" class="btn btn-outline-info">
+                        <i class="fas fa-chart-pie me-2"></i>View Analysis
+                    </a>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-home me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Spending Ratio -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-percentage me-2"></i>Spending Ratio
+                </h6>
+            </div>
+            <div class="card-body">
+                {% set spending_ratio = (total_spent / income * 100) if income > 0 else 0 %}
+                <div class="text-center">
+                    <h3 class="text-primary">{{ "%.1f"|format(spending_ratio) }}%</h3>
+                    <p class="text-muted mb-2">of income spent</p>
+                    
+                    <div class="progress mb-2">
+                        <div class="progress-bar {% if spending_ratio > 80 %}bg-danger{% elif spending_ratio > 60 %}bg-warning{% else %}bg-success{% endif %}" 
+                             style="width: {{ spending_ratio }}%"></div>
+                    </div>
+                    
+                    {% if spending_ratio > 80 %}
+                        <small class="text-danger">High spending - consider reducing expenses</small>
+                    {% elif spending_ratio > 60 %}
+                        <small class="text-warning">Moderate spending - monitor closely</small>
+                    {% else %}
+                        <small class="text-success">Good spending ratio - keep it up!</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

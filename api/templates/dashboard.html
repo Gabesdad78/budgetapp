@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Smart Budget App{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="fw-bold">
+            <i class="fas fa-chart-line me-3"></i>Dashboard
+        </h1>
+        <p class="text-muted">Welcome back! Here's your financial overview.</p>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Monthly Income</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(income) }}</h3>
+                </div>
+                <i class="fas fa-dollar-sign fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Total Spent</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(total_spent) }}</h3>
+                </div>
+                <i class="fas fa-shopping-cart fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Budget Set</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(total_budget) }}</h3>
+                </div>
+                <i class="fas fa-piggy-bank fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Remaining</h6>
+                    <h3 class="mb-0">${{ "%.2f"|format(income - total_spent) }}</h3>
+                </div>
+                <i class="fas fa-wallet fa-2x opacity-75"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Recent Transactions -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2"></i>Recent Transactions
+                </h5>
+                <a href="{{ url_for('add_transaction') }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus me-1"></i>Add Transaction
+                </a>
+            </div>
+            <div class="card-body">
+                {% if transactions %}
+                    {% for transaction in transactions[-5:] %}
+                    <div class="transaction-item">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <h6 class="mb-1">{{ transaction.description }}</h6>
+                                <small class="text-muted">{{ transaction.date }}</small>
+                            </div>
+                            <div class="col-md-3">
+                                <span class="category-badge bg-primary text-white">
+                                    {{ transaction.category }}
+                                </span>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <h6 class="text-danger mb-0">-${{ "%.2f"|format(transaction.amount) }}</h6>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No transactions yet. Add your first transaction!</p>
+                        <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Add Transaction
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Budget Overview -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>Budget Overview
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if budgets %}
+                    {% for category, budget in budgets.items() %}
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="fw-medium">{{ category }}</span>
+                            <span class="text-muted">${{ "%.2f"|format(budget) }}</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-success" style="width: 25%"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('set_budget') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-edit me-1"></i>Edit Budget
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No budget set yet.</p>
+                        <a href="{{ url_for('set_budget') }}" class="btn btn-primary">
+                            <i class="fas fa-cog me-2"></i>Set Budget
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="mb-3">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </h5>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <a href="{{ url_for('add_transaction') }}" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-plus me-2"></i>Add Transaction
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('set_budget') }}" class="btn btn-outline-success w-100">
+                            <i class="fas fa-cog me-2"></i>Set Budget
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('spending_analysis') }}" class="btn btn-outline-info w-100">
+                            <i class="fas fa-chart-pie me-2"></i>View Analysis
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('ml_recommendations') }}" class="btn btn-outline-warning w-100">
+                            <i class="fas fa-lightbulb me-2"></i>Get Tips
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

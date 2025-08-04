@@ -6,6 +6,7 @@ import csv
 import io
 import uuid
 import hashlib
+import traceback
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
@@ -72,6 +73,12 @@ def load_data():
 # Save data to files
 def save_data():
     try:
+        # For Vercel deployment, we'll use in-memory storage
+        # but still try to save files if possible
+        if os.environ.get('VERCEL'):
+            print("Running on Vercel - using in-memory storage")
+            return
+            
         # Ensure the directory exists
         os.makedirs(current_dir, exist_ok=True)
         
@@ -93,6 +100,7 @@ def save_data():
             
     except Exception as e:
         print(f"Error saving data: {e}")
+        # Continue with in-memory storage
 
 # Hash password
 def hash_password(password):
@@ -101,9 +109,60 @@ def hash_password(password):
 # Initialize data
 load_data()
 
+# Error handler
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({
+        "error": "Internal Server Error",
+        "message": "Something went wrong. Please try again.",
+        "details": str(error)
+    }), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return jsonify({
+        "error": "Page Not Found",
+        "message": "The page you're looking for doesn't exist."
+    }), 404
+
+@app.route('/debug')
+def debug_info():
+    """Debug endpoint to check app status"""
+    return jsonify({
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "users_count": len(users),
+        "transactions_count": len(transactions),
+        "budgets_count": len(budgets),
+        "goals_count": len(goals),
+        "current_dir": current_dir,
+        "files_exist": {
+            "users": os.path.exists(USERS_FILE),
+            "transactions": os.path.exists(TRANSACTIONS_FILE),
+            "budgets": os.path.exists(BUDGETS_FILE),
+            "goals": os.path.exists(GOALS_FILE)
+        },
+        "vercel": os.environ.get('VERCEL', False),
+        "environment": os.environ.get('FLASK_ENV', 'development')
+    })
+
+@app.route('/test')
+def test_route():
+    """Simple test route to check if app is working"""
+    return jsonify({
+        "message": "App is working!",
+        "timestamp": datetime.now().isoformat(),
+        "status": "success"
+    })
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        print(f"Index error: {e}")
+        print(traceback.format_exc())
+        return jsonify({"error": "Template rendering failed", "details": str(e)}), 500
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -140,6 +199,7 @@ def register():
         return render_template('register.html')
     except Exception as e:
         print(f"Registration error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred during registration. Please try again.', 'error')
         return render_template('register.html')
 
@@ -164,6 +224,7 @@ def login():
         return render_template('login.html')
     except Exception as e:
         print(f"Login error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred during login. Please try again.', 'error')
         return render_template('login.html')
 
@@ -195,6 +256,7 @@ def forgot_password():
         return render_template('forgot_password.html')
     except Exception as e:
         print(f"Forgot password error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred. Please try again.', 'error')
         return render_template('forgot_password.html')
 
@@ -247,6 +309,7 @@ def reset_password(token):
         return render_template('reset_password.html', token=token)
     except Exception as e:
         print(f"Reset password error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred. Please try again.', 'error')
         return redirect(url_for('forgot_password'))
 
@@ -273,6 +336,7 @@ def dashboard():
                              total_budget=total_budget)
     except Exception as e:
         print(f"Dashboard error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred loading the dashboard. Please try again.', 'error')
         return render_template('dashboard.html', 
                              transactions=[],
@@ -315,6 +379,7 @@ def add_transaction():
         return render_template('add_transaction.html')
     except Exception as e:
         print(f"Add transaction error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred adding the transaction. Please try again.', 'error')
         return render_template('add_transaction.html')
 
@@ -342,6 +407,7 @@ def set_budget():
         return render_template('set_budget.html')
     except Exception as e:
         print(f"Set budget error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred setting the budget. Please try again.', 'error')
         return render_template('set_budget.html')
 
@@ -366,6 +432,7 @@ def spending_analysis():
                              transactions=user_transactions)
     except Exception as e:
         print(f"Spending analysis error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred loading spending analysis. Please try again.', 'error')
         return render_template('spending_analysis.html', 
                              category_spending={},
@@ -407,6 +474,7 @@ def ml_recommendations():
         return render_template('ml_recommendations.html', recommendations=recommendations)
     except Exception as e:
         print(f"ML recommendations error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred loading recommendations. Please try again.', 'error')
         return render_template('ml_recommendations.html', recommendations=[])
 
@@ -422,6 +490,7 @@ def goals_page():
         return render_template('goals.html', goals=user_goals)
     except Exception as e:
         print(f"Goals error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred loading goals. Please try again.', 'error')
         return render_template('goals.html', goals=[])
 
@@ -457,6 +526,7 @@ def add_goal():
         return redirect(url_for('goals_page'))
     except Exception as e:
         print(f"Add goal error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred adding the goal. Please try again.', 'error')
         return redirect(url_for('goals_page'))
 
@@ -480,6 +550,7 @@ def update_goal_progress():
         return redirect(url_for('goals_page'))
     except Exception as e:
         print(f"Update goal progress error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred updating goal progress. Please try again.', 'error')
         return redirect(url_for('goals_page'))
 
@@ -514,6 +585,7 @@ def export_data():
         )
     except Exception as e:
         print(f"Export data error: {e}")
+        print(traceback.format_exc())
         flash('An error occurred exporting data. Please try again.', 'error')
         return redirect(url_for('dashboard'))
 

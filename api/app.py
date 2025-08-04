@@ -9,18 +9,21 @@ import io
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 
-# Data storage files
+# Data storage - in-memory for Vercel compatibility
+users = {}
+transactions = {}
+budgets = {}
+goals = {}
+
+# Optional file storage (will fail gracefully on Vercel)
 DATA_DIR = 'data'
 USERS_FILE = os.path.join(DATA_DIR, 'users.json')
 TRANSACTIONS_FILE = os.path.join(DATA_DIR, 'transactions.json')
 BUDGETS_FILE = os.path.join(DATA_DIR, 'budgets.json')
 GOALS_FILE = os.path.join(DATA_DIR, 'goals.json')
 
-# Create data directory if it doesn't exist
-os.makedirs(DATA_DIR, exist_ok=True)
-
 def load_data(filename, default=None):
-    """Load data from JSON file"""
+    """Load data from JSON file - gracefully handles missing files"""
     if default is None:
         default = {}
     try:
@@ -32,19 +35,26 @@ def load_data(filename, default=None):
         return default
 
 def save_data(data, filename):
-    """Save data to JSON file"""
+    """Save data to JSON file - gracefully handles write failures"""
     try:
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
         with open(filename, 'w') as f:
             json.dump(data, f, indent=2)
         return True
     except:
+        # On Vercel, file writes will fail, but that's okay
         return False
 
-# Load data
-users = load_data(USERS_FILE)
-transactions = load_data(TRANSACTIONS_FILE)
-budgets = load_data(BUDGETS_FILE)
-goals = load_data(GOALS_FILE)
+# Try to load existing data, but don't fail if it doesn't exist
+try:
+    users = load_data(USERS_FILE)
+    transactions = load_data(TRANSACTIONS_FILE)
+    budgets = load_data(BUDGETS_FILE)
+    goals = load_data(GOALS_FILE)
+except:
+    # If loading fails, start with empty data
+    pass
 
 @app.route('/')
 def index():
@@ -80,7 +90,7 @@ def register():
         budgets[username] = {}
         goals[username] = []
         
-        # Save data
+        # Try to save data (will fail gracefully on Vercel)
         save_data(users, USERS_FILE)
         save_data(transactions, TRANSACTIONS_FILE)
         save_data(budgets, BUDGETS_FILE)
@@ -174,6 +184,7 @@ def add_transaction():
             transactions[user] = []
         transactions[user].append(new_transaction)
         
+        # Try to save data
         save_data(transactions, TRANSACTIONS_FILE)
         flash('Transaction added successfully!', 'success')
         return redirect(url_for('dashboard'))
@@ -200,6 +211,7 @@ def set_budget():
             'Other': float(data.get('other', 0))
         }
         
+        # Try to save data
         save_data(budgets, BUDGETS_FILE)
         flash('Budget updated successfully!', 'success')
         return redirect(url_for('dashboard'))
@@ -325,6 +337,7 @@ def add_goal():
         goals[user] = []
     goals[user].append(new_goal)
     
+    # Try to save data
     save_data(goals, GOALS_FILE)
     flash('Goal added successfully!', 'success')
     return redirect(url_for('goals_page'))
@@ -344,6 +357,7 @@ def update_goal_progress():
             goal['current_amount'] += amount
             break
     
+    # Try to save data
     save_data(goals, GOALS_FILE)
     flash('Goal progress updated!', 'success')
     return redirect(url_for('goals_page'))
@@ -400,6 +414,18 @@ def api_index():
             "goals": "/goals",
             "export_data": "/export_data"
         }
+    })
+
+@app.route('/health')
+def health_check():
+    return jsonify({
+        "status": "healthy",
+        "message": "Budget App is running successfully",
+        "timestamp": datetime.now().isoformat(),
+        "users_count": len(users),
+        "transactions_count": sum(len(t) for t in transactions.values()),
+        "budgets_count": len(budgets),
+        "goals_count": sum(len(g) for g in goals.values())
     })
 
 if __name__ == '__main__':

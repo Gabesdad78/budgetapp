@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import Supabase configuration
 from supabase_config import get_supabase_manager
 
-# Import smart routes
+# Import smart routes - use absolute import
 import smart_routes
 smart_bp = smart_routes.smart_bp
 

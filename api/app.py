@@ -5,15 +5,77 @@ import os
 import csv
 import io
 import uuid
+import hashlib
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 
-# Simple in-memory storage for development
-users = {}
-transactions = []
-budgets = {}
-goals = []
+# Data storage files
+USERS_FILE = 'users.json'
+TRANSACTIONS_FILE = 'transactions.json'
+BUDGETS_FILE = 'budgets.json'
+GOALS_FILE = 'goals.json'
+
+# Load data from files
+def load_data():
+    global users, transactions, budgets, goals
+    users = {}
+    transactions = []
+    budgets = {}
+    goals = []
+    
+    # Load users
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, 'r') as f:
+                users = json.load(f)
+        except:
+            users = {}
+    
+    # Load transactions
+    if os.path.exists(TRANSACTIONS_FILE):
+        try:
+            with open(TRANSACTIONS_FILE, 'r') as f:
+                transactions = json.load(f)
+        except:
+            transactions = []
+    
+    # Load budgets
+    if os.path.exists(BUDGETS_FILE):
+        try:
+            with open(BUDGETS_FILE, 'r') as f:
+                budgets = json.load(f)
+        except:
+            budgets = {}
+    
+    # Load goals
+    if os.path.exists(GOALS_FILE):
+        try:
+            with open(GOALS_FILE, 'r') as f:
+                goals = json.load(f)
+        except:
+            goals = []
+
+# Save data to files
+def save_data():
+    try:
+        with open(USERS_FILE, 'w') as f:
+            json.dump(users, f, indent=2)
+        with open(TRANSACTIONS_FILE, 'w') as f:
+            json.dump(transactions, f, indent=2)
+        with open(BUDGETS_FILE, 'w') as f:
+            json.dump(budgets, f, indent=2)
+        with open(GOALS_FILE, 'w') as f:
+            json.dump(goals, f, indent=2)
+    except Exception as e:
+        print(f"Error saving data: {e}")
+
+# Hash password
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# Initialize data
+load_data()
 
 @app.route('/')
 def index():
@@ -36,14 +98,16 @@ def register():
             flash('Username already exists!', 'error')
             return render_template('register.html')
         
-        # Create user
+        # Create user with hashed password
         user_id = str(uuid.uuid4())
         users[username] = {
             'id': user_id,
             'email': email,
             'username': username,
+            'password': hash_password(password),
             'income': income
         }
+        save_data()
         
         flash('Registration successful! Please login.', 'success')
         return redirect(url_for('login'))
@@ -57,9 +121,9 @@ def login():
         email = data.get('email')
         password = data.get('password')
         
-        # Simple authentication
+        # Check credentials
         for user in users.values():
-            if user['email'] == email:
+            if user['email'] == email and user['password'] == hash_password(password):
                 session['user_id'] = user['id']
                 session['username'] = user['username']
                 flash('Login successful!', 'success')
@@ -68,6 +132,79 @@ def login():
         flash('Invalid email or password!', 'error')
     
     return render_template('login.html')
+
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        
+        # Find user by email
+        user_found = None
+        for username, user in users.items():
+            if user['email'] == email:
+                user_found = user
+                break
+        
+        if user_found:
+            # Generate a simple reset token (in production, use proper tokens)
+            reset_token = str(uuid.uuid4())
+            user_found['reset_token'] = reset_token
+            user_found['reset_expires'] = (datetime.now() + timedelta(hours=1)).isoformat()
+            save_data()
+            
+            flash(f'Password reset link sent to {email}. Check your email.', 'success')
+            return redirect(url_for('reset_password', token=reset_token))
+        else:
+            flash('Email not found. Please check your email address.', 'error')
+    
+    return render_template('forgot_password.html')
+
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    # Find user with this token
+    user_found = None
+    for username, user in users.items():
+        if user.get('reset_token') == token:
+            # Check if token is expired
+            if 'reset_expires' in user:
+                expires = datetime.fromisoformat(user['reset_expires'])
+                if datetime.now() < expires:
+                    user_found = user
+                else:
+                    flash('Reset link has expired. Please request a new one.', 'error')
+                    return redirect(url_for('forgot_password'))
+            break
+    
+    if not user_found:
+        flash('Invalid or expired reset link.', 'error')
+        return redirect(url_for('forgot_password'))
+    
+    if request.method == 'POST':
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not new_password or not confirm_password:
+            flash('Both password fields are required!', 'error')
+            return render_template('reset_password.html', token=token)
+        
+        if new_password != confirm_password:
+            flash('Passwords do not match!', 'error')
+            return render_template('reset_password.html', token=token)
+        
+        if len(new_password) < 6:
+            flash('Password must be at least 6 characters long!', 'error')
+            return render_template('reset_password.html', token=token)
+        
+        # Update password
+        user_found['password'] = hash_password(new_password)
+        user_found.pop('reset_token', None)
+        user_found.pop('reset_expires', None)
+        save_data()
+        
+        flash('Password reset successful! You can now login with your new password.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('reset_password.html', token=token)
 
 @app.route('/dashboard')
 def dashboard():
@@ -115,6 +252,7 @@ def add_transaction():
             'date': date
         }
         transactions.append(transaction)
+        save_data()
         
         flash('Transaction added successfully!', 'success')
         return redirect(url_for('dashboard'))
@@ -137,6 +275,7 @@ def set_budget():
                 budget_data[category] = float(value)
         
         budgets[user_id] = budget_data
+        save_data()
         flash('Budget set successfully!', 'success')
         return redirect(url_for('dashboard'))
     
@@ -230,6 +369,7 @@ def add_goal():
         'category': category
     }
     goals.append(goal)
+    save_data()
     
     flash('Goal added successfully!', 'success')
     return redirect(url_for('goals_page'))
@@ -248,6 +388,7 @@ def update_goal_progress():
             goal['current_amount'] = current_amount
             break
     
+    save_data()
     flash('Goal progress updated!', 'success')
     return redirect(url_for('goals_page'))
 

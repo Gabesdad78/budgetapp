@@ -242,24 +242,31 @@ def login():
             password = data.get('password')
             
             print(f"Login attempt for email: {email}")
+            print(f"Users available: {list(users.keys())}")
             
-            # Check credentials - simplified logic
+            # Simple credential check
             user_found = None
             for username, user in users.items():
-                if user.get('email') == email and user.get('password') == hash_password(password):
-                    user_found = user
-                    break
+                print(f"Checking user: {username}")
+                if user.get('email') == email:
+                    print(f"Email match found for: {username}")
+                    if user.get('password') == hash_password(password):
+                        print(f"Password match for: {username}")
+                        user_found = user
+                        break
+                    else:
+                        print(f"Password mismatch for: {username}")
             
             if user_found:
-                print(f"Login successful for user: {user_found.get('username')}")
-                # Set session data
+                print(f"Login successful for: {user_found.get('username')}")
+                # Set minimal session data
                 session['user_id'] = user_found.get('id')
                 session['username'] = user_found.get('username')
-                print(f"Session set - user_id: {session.get('user_id')}")
+                print(f"Session data set: {dict(session)}")
                 flash('Login successful!', 'success')
                 return redirect(url_for('dashboard'))
             else:
-                print("Login failed - invalid credentials")
+                print("No matching user found")
                 flash('Invalid email or password!', 'error')
         
         return render_template('login.html')
@@ -681,6 +688,28 @@ def health_check():
         "timestamp": datetime.now().isoformat(),
         "message": "Budget App is running successfully!"
     })
+
+@app.route('/dashboard-simple')
+def dashboard_simple():
+    """Simple dashboard test without template"""
+    try:
+        if 'user_id' not in session:
+            return jsonify({"error": "No user session", "redirect": "login"})
+        
+        user_id = session['user_id']
+        username = session.get('username', 'Unknown')
+        
+        return jsonify({
+            "status": "success",
+            "user_id": user_id,
+            "username": username,
+            "message": "Dashboard access successful"
+        })
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "status": "error"
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True) 

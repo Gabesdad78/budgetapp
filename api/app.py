@@ -169,6 +169,22 @@ def test_error():
             "type": type(e).__name__
         }), 500
 
+@app.route('/test-session')
+def test_session():
+    """Test route to check session functionality"""
+    try:
+        return jsonify({
+            "session_data": dict(session),
+            "users_count": len(users),
+            "user_ids": [user.get('id') for user in users.values()],
+            "status": "success"
+        })
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "status": "error"
+        }), 500
+
 @app.route('/')
 def index():
     try:
@@ -225,15 +241,26 @@ def login():
             email = data.get('email')
             password = data.get('password')
             
-            # Check credentials
-            for user in users.values():
-                if user['email'] == email and user['password'] == hash_password(password):
-                    session['user_id'] = user['id']
-                    session['username'] = user['username']
-                    flash('Login successful!', 'success')
-                    return redirect(url_for('dashboard'))
+            print(f"Login attempt for email: {email}")
             
-            flash('Invalid email or password!', 'error')
+            # Check credentials - simplified logic
+            user_found = None
+            for username, user in users.items():
+                if user.get('email') == email and user.get('password') == hash_password(password):
+                    user_found = user
+                    break
+            
+            if user_found:
+                print(f"Login successful for user: {user_found.get('username')}")
+                # Set session data
+                session['user_id'] = user_found.get('id')
+                session['username'] = user_found.get('username')
+                print(f"Session set - user_id: {session.get('user_id')}")
+                flash('Login successful!', 'success')
+                return redirect(url_for('dashboard'))
+            else:
+                print("Login failed - invalid credentials")
+                flash('Invalid email or password!', 'error')
         
         return render_template('login.html')
     except Exception as e:
@@ -330,17 +357,39 @@ def reset_password(token):
 @app.route('/dashboard')
 def dashboard():
     try:
+        print(f"Dashboard access - session: {dict(session)}")
+        
         if 'user_id' not in session:
+            print("No user_id in session, redirecting to login")
             return redirect(url_for('login'))
         
         user_id = session['user_id']
+        print(f"User ID from session: {user_id}")
+        
+        # Find user data
+        user_data = None
+        for username, user in users.items():
+            if user.get('id') == user_id:
+                user_data = user
+                break
+        
+        if not user_data:
+            print(f"User not found for ID: {user_id}")
+            session.clear()
+            flash('User session expired. Please login again.', 'error')
+            return redirect(url_for('login'))
+        
+        print(f"User data found: {user_data.get('username')}")
+        
         user_transactions = [t for t in transactions if t.get('user_id') == user_id]
         user_budgets = budgets.get(user_id, {})
         user_goals = [g for g in goals if g.get('user_id') == user_id]
         
         # Calculate basic stats
-        total_spent = sum(t['amount'] for t in user_transactions)
+        total_spent = sum(t.get('amount', 0) for t in user_transactions)
         total_budget = sum(user_budgets.values())
+        
+        print(f"Dashboard data - transactions: {len(user_transactions)}, budgets: {len(user_budgets)}, goals: {len(user_goals)}")
         
         return render_template('dashboard.html', 
                              transactions=user_transactions[-5:],

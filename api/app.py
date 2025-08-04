@@ -73,13 +73,13 @@ def load_data():
 # Save data to files
 def save_data():
     try:
-        # For Vercel deployment, we'll use in-memory storage
-        # but still try to save files if possible
+        # For Vercel deployment, we'll use in-memory storage only
+        # Vercel has a read-only filesystem, so we can't write files
         if os.environ.get('VERCEL'):
-            print("Running on Vercel - using in-memory storage")
+            print("Running on Vercel - using in-memory storage only")
             return
             
-        # Ensure the directory exists
+        # Only try to save files if not on Vercel
         os.makedirs(current_dir, exist_ok=True)
         
         # Save users
@@ -154,6 +154,20 @@ def test_route():
         "timestamp": datetime.now().isoformat(),
         "status": "success"
     })
+
+@app.route('/test-error')
+def test_error():
+    """Test route to simulate an error"""
+    try:
+        # This will cause an error
+        result = 1 / 0
+        return jsonify({"result": result})
+    except Exception as e:
+        return jsonify({
+            "error": "Test error",
+            "message": str(e),
+            "type": type(e).__name__
+        }), 500
 
 @app.route('/')
 def index():

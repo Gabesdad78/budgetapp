@@ -15,7 +15,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from supabase_config import get_supabase_manager
 
 # Import smart routes
-from smart_routes import smart_bp
+import smart_routes
+smart_bp = smart_routes.smart_bp
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'

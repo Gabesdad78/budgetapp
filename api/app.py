@@ -6,6 +6,10 @@ import os
 import csv
 import io
 import uuid
+import sys
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import Supabase configuration
 from supabase_config import get_supabase_manager

@@ -1,6 +1,12 @@
 """
 Smart AI Routes for Budget App
 """
+import os
+import sys
+
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from flask import Blueprint, render_template, jsonify, request, session
 from smart_features import smart_ai
 from supabase_config import get_supabase_manager

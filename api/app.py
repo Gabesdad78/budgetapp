@@ -188,6 +188,8 @@ def test_session():
 @app.route('/')
 def index():
     try:
+        # Clear any existing flash messages to prevent dashboard errors from showing
+        session.pop('_flashes', None)
         return render_template('index.html')
     except Exception as e:
         print(f"Index error: {e}")

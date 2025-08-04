@@ -10,8 +10,14 @@ import uuid
 # Import Supabase configuration
 from supabase_config import get_supabase_manager
 
+# Import smart routes
+from smart_routes import smart_bp
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
+
+# Register smart blueprint
+app.register_blueprint(smart_bp, url_prefix='/smart')
 
 # Initialize Supabase manager
 supabase = get_supabase_manager()

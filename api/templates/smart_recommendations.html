@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Smart Recommendations{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">
+                    <i class="fas fa-lightbulb text-warning"></i> AI Smart Recommendations
+                </h1>
+                <button class="btn btn-primary" onclick="refreshRecommendations()">
+                    <i class="fas fa-sync-alt"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recommendations Grid -->
+    <div class="row">
+        {% for recommendation in recommendations %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-header bg-transparent border-0">
+                    {% if recommendation.type == 'budget_warning' %}
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-exclamation-triangle text-warning fa-2x me-3"></i>
+                            <div>
+                                <h6 class="mb-0 text-warning">Budget Warning</h6>
+                                <small class="text-muted">{{ recommendation.category }}</small>
+                            </div>
+                        </div>
+                    {% elif recommendation.type == 'budget_opportunity' %}
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-chart-line text-success fa-2x me-3"></i>
+                            <div>
+                                <h6 class="mb-0 text-success">Budget Opportunity</h6>
+                                <small class="text-muted">{{ recommendation.category }}</small>
+                            </div>
+                        </div>
+                    {% elif recommendation.type == 'savings_opportunity' %}
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-piggy-bank text-info fa-2x me-3"></i>
+                            <div>
+                                <h6 class="mb-0 text-info">Savings Opportunity</h6>
+                                <small class="text-muted">{{ recommendation.category }}</small>
+                            </div>
+                        </div>
+                    {% elif recommendation.type == 'spending_insight' %}
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-eye text-primary fa-2x me-3"></i>
+                            <div>
+                                <h6 class="mb-0 text-primary">Spending Insight</h6>
+                                <small class="text-muted">Pattern Analysis</small>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-info-circle text-secondary fa-2x me-3"></i>
+                            <div>
+                                <h6 class="mb-0 text-secondary">General</h6>
+                                <small class="text-muted">Recommendation</small>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <p class="card-text">{{ recommendation.message }}</p>
+                    {% if recommendation.suggestion %}
+                    <div class="alert alert-light border">
+                        <strong>💡 Suggestion:</strong> {{ recommendation.suggestion }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-transparent border-0">
+                    <button class="btn btn-outline-primary btn-sm" onclick="applyRecommendation('{{ recommendation.type }}', '{{ recommendation.category }}')">
+                        <i class="fas fa-check"></i> Apply
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="dismissRecommendation('{{ recommendation.type }}')">
+                        <i class="fas fa-times"></i> Dismiss
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- No Recommendations Message -->
+    {% if not recommendations %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-chart-line text-muted fa-4x mb-3"></i>
+                    <h4 class="text-muted">No Recommendations Yet</h4>
+                    <p class="text-muted">Start adding transactions and setting budgets to get personalized AI recommendations!</p>
+                    <a href="{{ url_for('add_transaction') }}" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Add Transaction
+                    </a>
+                    <a href="{{ url_for('set_budget') }}" class="btn btn-outline-primary ms-2">
+                        <i class="fas fa-cog"></i> Set Budget
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- AI Insights Summary -->
+    {% if recommendations %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card bg-gradient-primary text-white">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="card-title">
+                                <i class="fas fa-brain"></i> AI Insights Summary
+                            </h5>
+                            <p class="card-text mb-0">
+                                Based on your spending patterns, we've identified {{ recommendations|length }} opportunities 
+                                to optimize your budget and improve your financial health.
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="d-flex flex-column">
+                                <span class="h4 mb-0">{{ recommendations|length }}</span>
+                                <small>Recommendations</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function refreshRecommendations() {
+    location.reload();
+}
+
+function applyRecommendation(type, category) {
+    // Show success message
+    Swal.fire({
+        title: 'Recommendation Applied!',
+        text: 'We\'ll help you implement this suggestion.',
+        icon: 'success',
+        confirmButtonText: 'Great!'
+    });
+}
+
+function dismissRecommendation(type) {
+    // Show confirmation
+    Swal.fire({
+        title: 'Dismiss Recommendation?',
+        text: 'This recommendation will be hidden for now.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Dismiss',
+        cancelButtonText: 'Keep'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Hide the recommendation card
+            event.target.closest('.col-md-6').style.display = 'none';
+        }
+    });
+}
+
+// Add some animations
+document.addEventListener('DOMContentLoaded', function() {
+    const cards = document.querySelectorAll('.card');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+</script>
+
+<!-- SweetAlert2 for better modals -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+{% endblock %} 

@@ -5,56 +5,16 @@ import json
 import os
 import csv
 import io
+import uuid
+
+# Import Supabase configuration
+from supabase_config import get_supabase_manager
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
 
-# Data storage - in-memory for Vercel compatibility
-users = {}
-transactions = {}
-budgets = {}
-goals = {}
-
-# Optional file storage (will fail gracefully on Vercel)
-DATA_DIR = 'data'
-USERS_FILE = os.path.join(DATA_DIR, 'users.json')
-TRANSACTIONS_FILE = os.path.join(DATA_DIR, 'transactions.json')
-BUDGETS_FILE = os.path.join(DATA_DIR, 'budgets.json')
-GOALS_FILE = os.path.join(DATA_DIR, 'goals.json')
-
-def load_data(filename, default=None):
-    """Load data from JSON file - gracefully handles missing files"""
-    if default is None:
-        default = {}
-    try:
-        if os.path.exists(filename):
-            with open(filename, 'r') as f:
-                return json.load(f)
-        return default
-    except:
-        return default
-
-def save_data(data, filename):
-    """Save data to JSON file - gracefully handles write failures"""
-    try:
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=2)
-        return True
-    except:
-        # On Vercel, file writes will fail, but that's okay
-        return False
-
-# Try to load existing data, but don't fail if it doesn't exist
-try:
-    users = load_data(USERS_FILE)
-    transactions = load_data(TRANSACTIONS_FILE)
-    budgets = load_data(BUDGETS_FILE)
-    goals = load_data(GOALS_FILE)
-except:
-    # If loading fails, start with empty data
-    pass
+# Initialize Supabase manager
+supabase = get_supabase_manager()
 
 @app.route('/')
 def index():
@@ -73,31 +33,40 @@ def register():
             flash('All fields are required!', 'error')
             return render_template('register.html')
         
-        if username in users:
-            flash('Username already exists!', 'error')
+        try:
+            # Check if user already exists
+            existing_user = supabase.get_user_profile_by_username(username)
+            if existing_user:
+                flash('Username already exists!', 'error')
+                return render_template('register.html')
+            
+            # Create user in Supabase auth
+            auth_response = supabase.client.auth.sign_up({
+                'email': email,
+                'password': password
+            })
+            
+            if auth_response.user:
+                user_id = auth_response.user.id
+                
+                # Create user profile
+                user_profile = supabase.create_user_profile(
+                    user_id=user_id,
+                    email=email,
+                    username=username,
+                    income=income
+                )
+                
+                flash('Registration successful! Please login.', 'success')
+                return redirect(url_for('login'))
+            else:
+                flash('Registration failed. Please try again.', 'error')
+                return render_template('register.html')
+                
+        except Exception as e:
+            print(f"Registration error: {e}")
+            flash('Registration failed. Please try again.', 'error')
             return render_template('register.html')
-
-        users[username] = {
-            'email': email,
-            'password': password,
-            'income': income,
-            'id': len(users) + 1,
-            'created_at': datetime.now().isoformat()
-        }
-        
-        # Initialize user data
-        transactions[username] = []
-        budgets[username] = {}
-        goals[username] = []
-        
-        # Try to save data (will fail gracefully on Vercel)
-        save_data(users, USERS_FILE)
-        save_data(transactions, TRANSACTIONS_FILE)
-        save_data(budgets, BUDGETS_FILE)
-        save_data(goals, GOALS_FILE)
-        
-        flash('Registration successful! Please login.', 'success')
-        return redirect(url_for('login'))
     
     return render_template('register.html')
 
@@ -105,57 +74,66 @@ def register():
 def login():
     if request.method == 'POST':
         data = request.form
-        username = data.get('username')
+        email = data.get('email')
         password = data.get('password')
         
-        if username in users and users[username]['password'] == password:
-            session['user'] = username
-            flash('Login successful!', 'success')
-            return redirect(url_for('dashboard'))
-        else:
-            flash('Invalid username or password!', 'error')
+        try:
+            # Authenticate with Supabase
+            auth_response = supabase.client.auth.sign_in_with_password({
+                'email': email,
+                'password': password
+            })
+            
+            if auth_response.user:
+                # Get user profile
+                user_profile = supabase.get_user_profile(auth_response.user.id)
+                if user_profile:
+                    session['user_id'] = auth_response.user.id
+                    session['username'] = user_profile['username']
+                    flash('Login successful!', 'success')
+                    return redirect(url_for('dashboard'))
+                else:
+                    flash('User profile not found!', 'error')
+            else:
+                flash('Invalid email or password!', 'error')
+                
+        except Exception as e:
+            print(f"Login error: {e}")
+            flash('Login failed. Please try again.', 'error')
     
     return render_template('login.html')
 
 @app.route('/dashboard')
 def dashboard():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    user = session['user']
+    user_id = session['user_id']
     
-    # Ensure user exists in all data structures
-    if user not in users:
-        flash('User data not found. Please register again.', 'error')
-        session.pop('user', None)
-        return redirect(url_for('login'))
-    
-    # Initialize user data if missing
-    if user not in transactions:
-        transactions[user] = []
-    if user not in budgets:
-        budgets[user] = {}
-    if user not in goals:
-        goals[user] = []
-    
-    user_transactions = transactions.get(user, [])
-    user_budgets = budgets.get(user, {})
-    user_goals = goals.get(user, [])
-    
-    # Safe calculations with error handling
     try:
-        total_spent = sum(t.get('amount', 0) for t in user_transactions if isinstance(t, dict))
+        # Get user data from Supabase
+        user_profile = supabase.get_user_profile(user_id)
+        if not user_profile:
+            flash('User profile not found. Please register again.', 'error')
+            session.clear()
+            return redirect(url_for('login'))
+        
+        user_transactions = supabase.get_user_transactions(user_id)
+        user_budgets = supabase.get_user_budgets(user_id)
+        user_goals = supabase.get_user_goals(user_id)
+        
+        # Calculate analytics
+        total_spent = sum(t['amount'] for t in user_transactions)
         total_budget = sum(user_budgets.values())
         
         # Calculate spending trends
         recent_transactions = user_transactions[-7:] if len(user_transactions) >= 7 else user_transactions
-        weekly_spending = sum(t.get('amount', 0) for t in recent_transactions if isinstance(t, dict))
+        weekly_spending = sum(t['amount'] for t in recent_transactions)
         
         # Category breakdown
         category_spending = defaultdict(float)
         for transaction in user_transactions:
-            if isinstance(transaction, dict) and 'category' in transaction and 'amount' in transaction:
-                category_spending[transaction['category']] += transaction['amount']
+            category_spending[transaction['category']] += transaction['amount']
         
         # Budget progress
         budget_progress = {}
@@ -176,13 +154,12 @@ def dashboard():
                              total_spent=total_spent,
                              total_budget=total_budget,
                              weekly_spending=weekly_spending,
-                             income=users[user].get('income', 0),
+                             income=user_profile.get('income', 0),
                              category_spending=dict(category_spending),
                              budget_progress=budget_progress)
     
     except Exception as e:
-        # Log the error and provide a safe fallback
-        print(f"Dashboard error for user {user}: {str(e)}")
+        print(f"Dashboard error: {e}")
         flash('There was an error loading your dashboard. Please try again.', 'error')
         return render_template('dashboard.html', 
                              transactions=[],
@@ -197,100 +174,89 @@ def dashboard():
 
 @app.route('/add_transaction', methods=['GET', 'POST'])
 def add_transaction():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('login'))
     
     if request.method == 'POST':
         data = request.form
-        user = session['user']
+        user_id = session['user_id']
         
-        new_transaction = {
-            'id': len(transactions.get(user, [])) + 1,
-            'description': data.get('description'),
-            'amount': float(data.get('amount')),
-            'category': data.get('category'),
-            'date': data.get('date', datetime.now().strftime('%Y-%m-%d')),
-            'created_at': datetime.now().isoformat()
-        }
+        try:
+            new_transaction = supabase.add_transaction(
+                user_id=user_id,
+                description=data.get('description'),
+                amount=float(data.get('amount')),
+                category=data.get('category'),
+                transaction_date=data.get('date', datetime.now().strftime('%Y-%m-%d'))
+            )
+            
+            if new_transaction:
+                flash('Transaction added successfully!', 'success')
+            else:
+                flash('Failed to add transaction. Please try again.', 'error')
+                
+        except Exception as e:
+            print(f"Add transaction error: {e}")
+            flash('Failed to add transaction. Please try again.', 'error')
         
-        if user not in transactions:
-            transactions[user] = []
-        transactions[user].append(new_transaction)
-        
-        # Try to save data
-        save_data(transactions, TRANSACTIONS_FILE)
-        flash('Transaction added successfully!', 'success')
         return redirect(url_for('dashboard'))
     
     return render_template('add_transaction.html')
 
 @app.route('/set_budget', methods=['GET', 'POST'])
 def set_budget():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('login'))
     
     if request.method == 'POST':
         data = request.form
-        user = session['user']
+        user_id = session['user_id']
         
-        budgets[user] = {
-            'Food': float(data.get('food', 0)),
-            'Transportation': float(data.get('transportation', 0)),
-            'Entertainment': float(data.get('entertainment', 0)),
-            'Utilities': float(data.get('utilities', 0)),
-            'Shopping': float(data.get('shopping', 0)),
-            'Healthcare': float(data.get('healthcare', 0)),
-            'Education': float(data.get('education', 0)),
-            'Other': float(data.get('other', 0))
-        }
+        try:
+            budgets = {
+                'Food': float(data.get('food', 0)),
+                'Transportation': float(data.get('transportation', 0)),
+                'Entertainment': float(data.get('entertainment', 0)),
+                'Utilities': float(data.get('utilities', 0)),
+                'Shopping': float(data.get('shopping', 0)),
+                'Healthcare': float(data.get('healthcare', 0)),
+                'Education': float(data.get('education', 0)),
+                'Other': float(data.get('other', 0))
+            }
+            
+            success = supabase.set_user_budgets(user_id, budgets)
+            if success:
+                flash('Budget updated successfully!', 'success')
+            else:
+                flash('Failed to update budget. Please try again.', 'error')
+                
+        except Exception as e:
+            print(f"Set budget error: {e}")
+            flash('Failed to update budget. Please try again.', 'error')
         
-        # Try to save data
-        save_data(budgets, BUDGETS_FILE)
-        flash('Budget updated successfully!', 'success')
         return redirect(url_for('dashboard'))
     
     return render_template('set_budget.html')
 
 @app.route('/spending_analysis')
 def spending_analysis():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    user = session['user']
-    
-    # Ensure user exists
-    if user not in users:
-        flash('User data not found. Please register again.', 'error')
-        session.pop('user', None)
-        return redirect(url_for('login'))
-    
-    user_transactions = transactions.get(user, [])
+    user_id = session['user_id']
     
     try:
-        # Calculate spending by category
-        category_spending = defaultdict(float)
-        for transaction in user_transactions:
-            if isinstance(transaction, dict) and 'category' in transaction and 'amount' in transaction:
-                category_spending[transaction['category']] += transaction['amount']
-        
-        # Monthly trends
-        monthly_spending = defaultdict(float)
-        for transaction in user_transactions:
-            if isinstance(transaction, dict) and 'date' in transaction and 'amount' in transaction:
-                month = transaction['date'][:7]  # YYYY-MM
-                monthly_spending[month] += transaction['amount']
-        
-        # Top spending categories
-        top_categories = sorted(category_spending.items(), key=lambda x: x[1], reverse=True)[:5]
+        analytics = supabase.get_spending_analytics(user_id)
+        user_transactions = supabase.get_user_transactions(user_id)
         
         return render_template('spending_analysis.html', 
-                             category_spending=dict(category_spending),
-                             monthly_spending=dict(monthly_spending),
-                             top_categories=top_categories,
+                             category_spending=analytics['category_spending'],
+                             monthly_spending=analytics['monthly_spending'],
+                             top_categories=sorted(analytics['category_spending'].items(), key=lambda x: x[1], reverse=True)[:5],
                              transactions=user_transactions)
     
     except Exception as e:
-        print(f"Spending analysis error for user {user}: {str(e)}")
+        print(f"Spending analysis error: {e}")
         flash('There was an error loading spending analysis. Please try again.', 'error')
         return render_template('spending_analysis.html', 
                              category_spending={},
@@ -300,24 +266,19 @@ def spending_analysis():
 
 @app.route('/ml_recommendations')
 def ml_recommendations():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    user = session['user']
+    user_id = session['user_id']
     
-    # Ensure user exists
-    if user not in users:
-        flash('User data not found. Please register again.', 'error')
-        session.pop('user', None)
-        return redirect(url_for('login'))
-    
-    user_transactions = transactions.get(user, [])
-    user_budgets = budgets.get(user, {})
-    
-    # Advanced analytics with error handling
     try:
-        total_spent = sum(t.get('amount', 0) for t in user_transactions if isinstance(t, dict))
-        income = users[user].get('income', 0)
+        user_profile = supabase.get_user_profile(user_id)
+        user_transactions = supabase.get_user_transactions(user_id)
+        user_budgets = supabase.get_user_budgets(user_id)
+        
+        # Advanced analytics
+        total_spent = sum(t['amount'] for t in user_transactions)
+        income = user_profile.get('income', 0)
         
         recommendations = []
         
@@ -331,8 +292,7 @@ def ml_recommendations():
         # Category analysis
         category_spending = defaultdict(float)
         for transaction in user_transactions:
-            if isinstance(transaction, dict) and 'category' in transaction and 'amount' in transaction:
-                category_spending[transaction['category']] += transaction['amount']
+            category_spending[transaction['category']] += transaction['amount']
         
         for category, budget in user_budgets.items():
             spent = category_spending.get(category, 0)
@@ -367,7 +327,7 @@ def ml_recommendations():
                              spending_ratio=spending_ratio)
     
     except Exception as e:
-        print(f"ML recommendations error for user {user}: {str(e)}")
+        print(f"ML recommendations error: {e}")
         flash('There was an error loading recommendations. Please try again.', 'error')
         return render_template('ml_recommendations.html', 
                              recommendations=["💡 Start by adding some transactions to get personalized recommendations!"],
@@ -377,93 +337,107 @@ def ml_recommendations():
 
 @app.route('/goals')
 def goals_page():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    user = session['user']
-    user_goals = goals.get(user, [])
+    user_id = session['user_id']
     
-    return render_template('goals.html', goals=user_goals)
+    try:
+        user_goals = supabase.get_user_goals(user_id)
+        return render_template('goals.html', goals=user_goals)
+    except Exception as e:
+        print(f"Goals error: {e}")
+        flash('There was an error loading goals. Please try again.', 'error')
+        return render_template('goals.html', goals=[])
 
 @app.route('/add_goal', methods=['POST'])
 def add_goal():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    user = session['user']
+    user_id = session['user_id']
     data = request.form
     
-    new_goal = {
-        'id': len(goals.get(user, [])) + 1,
-        'title': data.get('title'),
-        'target_amount': float(data.get('target_amount')),
-        'current_amount': 0,
-        'deadline': data.get('deadline'),
-        'category': data.get('category'),
-        'created_at': datetime.now().isoformat()
-    }
+    try:
+        new_goal = supabase.add_goal(
+            user_id=user_id,
+            title=data.get('title'),
+            target_amount=float(data.get('target_amount')),
+            deadline=data.get('deadline'),
+            category=data.get('category')
+        )
+        
+        if new_goal:
+            flash('Goal added successfully!', 'success')
+        else:
+            flash('Failed to add goal. Please try again.', 'error')
+            
+    except Exception as e:
+        print(f"Add goal error: {e}")
+        flash('Failed to add goal. Please try again.', 'error')
     
-    if user not in goals:
-        goals[user] = []
-    goals[user].append(new_goal)
-    
-    # Try to save data
-    save_data(goals, GOALS_FILE)
-    flash('Goal added successfully!', 'success')
     return redirect(url_for('goals_page'))
 
 @app.route('/update_goal_progress', methods=['POST'])
 def update_goal_progress():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    user = session['user']
     data = request.form
-    goal_id = int(data.get('goal_id'))
+    goal_id = data.get('goal_id')
     amount = float(data.get('amount'))
     
-    for goal in goals.get(user, []):
-        if goal['id'] == goal_id:
-            goal['current_amount'] += amount
-            break
+    try:
+        success = supabase.update_goal_progress(goal_id, amount)
+        if success:
+            flash('Goal progress updated!', 'success')
+        else:
+            flash('Failed to update goal progress. Please try again.', 'error')
+            
+    except Exception as e:
+        print(f"Update goal progress error: {e}")
+        flash('Failed to update goal progress. Please try again.', 'error')
     
-    # Try to save data
-    save_data(goals, GOALS_FILE)
-    flash('Goal progress updated!', 'success')
     return redirect(url_for('goals_page'))
 
 @app.route('/export_data')
 def export_data():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    user = session['user']
-    user_transactions = transactions.get(user, [])
+    user_id = session['user_id']
     
-    # Create CSV data
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['Date', 'Description', 'Category', 'Amount'])
-    
-    for transaction in user_transactions:
-        writer.writerow([
-            transaction['date'],
-            transaction['description'],
-            transaction['category'],
-            transaction['amount']
-        ])
-    
-    output.seek(0)
-    return send_file(
-        io.BytesIO(output.getvalue().encode('utf-8')),
-        mimetype='text/csv',
-        as_attachment=True,
-        download_name=f'budget_data_{user}_{datetime.now().strftime("%Y%m%d")}.csv'
-    )
+    try:
+        user_transactions = supabase.get_user_transactions(user_id)
+        
+        # Create CSV data
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Date', 'Description', 'Category', 'Amount'])
+        
+        for transaction in user_transactions:
+            writer.writerow([
+                transaction['date'],
+                transaction['description'],
+                transaction['category'],
+                transaction['amount']
+            ])
+        
+        output.seek(0)
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'budget_data_{session["username"]}_{datetime.now().strftime("%Y%m%d")}.csv'
+        )
+    except Exception as e:
+        print(f"Export data error: {e}")
+        flash('Failed to export data. Please try again.', 'error')
+        return redirect(url_for('dashboard'))
 
 @app.route('/logout')
 def logout():
-    session.pop('user', None)
+    session.clear()
     flash('Logged out successfully!', 'success')
     return redirect(url_for('index'))
 
@@ -488,15 +462,29 @@ def api_index():
 
 @app.route('/health')
 def health_check():
-    return jsonify({
-        "status": "healthy",
-        "message": "Budget App is running successfully",
-        "timestamp": datetime.now().isoformat(),
-        "users_count": len(users),
-        "transactions_count": sum(len(t) for t in transactions.values()),
-        "budgets_count": len(budgets),
-        "goals_count": sum(len(g) for g in goals.values())
-    })
+    try:
+        # Test Supabase connection
+        if supabase:
+            return jsonify({
+                "status": "healthy",
+                "message": "Budget App is running successfully with Supabase",
+                "timestamp": datetime.now().isoformat(),
+                "supabase_connected": True
+            })
+        else:
+            return jsonify({
+                "status": "degraded",
+                "message": "Budget App is running but Supabase connection failed",
+                "timestamp": datetime.now().isoformat(),
+                "supabase_connected": False
+            })
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "message": f"Budget App error: {str(e)}",
+            "timestamp": datetime.now().isoformat(),
+            "supabase_connected": False
+        })
 
 if __name__ == '__main__':
     app.run(debug=True) 

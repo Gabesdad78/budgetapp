@@ -45,6 +45,15 @@ class SupabaseManager:
             print(f"Error getting user profile: {e}")
             return None
     
+    def get_user_profile_by_username(self, username: str) -> Optional[Dict]:
+        """Get user profile by username"""
+        try:
+            result = self.client.table('users').select('*').eq('username', username).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            print(f"Error getting user profile by username: {e}")
+            return None
+    
     def update_user_income(self, user_id: str, income: float) -> bool:
         """Update user income"""
         try:
